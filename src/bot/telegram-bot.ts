@@ -174,7 +174,21 @@ export class BotApp {
         logger.info(`[Step 1] Getting file path from Telegram for file_id: ${task.file_id}`);
         // Instead of this.bot.getFile, manually fetch to control the agent and bypass undici/request errors
         const nodeFetch = require('node-fetch');
-        const getFileRes = await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${task.file_id}`);
+        
+        // Add timeout to node-fetch request
+        const AbortController = require('abort-controller');
+        const controller1 = new AbortController();
+        const timeout1 = setTimeout(() => { controller1.abort(); }, 15000);
+        
+        let getFileRes;
+        try {
+          getFileRes = await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${task.file_id}`, {
+            signal: controller1.signal
+          });
+        } finally {
+          clearTimeout(timeout1);
+        }
+        
         const fileData = await getFileRes.json();
         
         if (!fileData.ok) {
@@ -191,8 +205,15 @@ export class BotApp {
         const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
         
         // We use node-fetch to completely bypass undici ETIMEDOUT bugs on cloud instances
-        const nodeFetch = require('node-fetch');
-        const response = await nodeFetch(fileUrl);
+        const controller2 = new AbortController();
+        const timeout2 = setTimeout(() => { controller2.abort(); }, 15000);
+        
+        let response;
+        try {
+          response = await nodeFetch(fileUrl, { signal: controller2.signal });
+        } finally {
+          clearTimeout(timeout2);
+        }
         
         if (!response.ok) {
            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
