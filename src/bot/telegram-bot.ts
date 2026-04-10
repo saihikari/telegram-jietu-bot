@@ -43,7 +43,7 @@ export class BotApp {
           keepAlive: true,
           family: 4 // Force IPv4, sometimes IPv6 on cloud VMs causes timeout/EFATAL
         }
-      }
+      } as any
     });
     this.processor = new ImageProcessor();
     this.excelGen = new ExcelGenerator();
