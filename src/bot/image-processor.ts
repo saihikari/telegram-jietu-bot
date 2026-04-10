@@ -35,6 +35,8 @@ export class ImageProcessor {
 
       let response;
       try {
+        // OpenAI SDK uses node-fetch internally which defaults to node 18's fetch.
+        // The fetch options pass an abort signal.
         response = await client.chat.completions.create({
           model: process.env.LLM_MODEL || settings.llm.model,
           messages: [
@@ -48,6 +50,10 @@ export class ImageProcessor {
           temperature: settings.llm.temperature,
           response_format: { type: "json_object" }
         }, { signal: controller.signal as any });
+      } catch (err: any) {
+        // Provide more detailed info for Connection Error
+        logger.error(`OpenAI Connection Error Details: URL=${client.baseURL}, Key Length=${client.apiKey?.length}, Error=${err.message}`);
+        throw err;
       } finally {
         clearTimeout(timeoutId);
       }
