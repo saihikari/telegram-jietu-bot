@@ -22,12 +22,29 @@ export class BotApp {
       throw new Error('BOT_TOKEN is missing in environment variables');
     }
     
+    // Disable node-telegram-bot-api's automatic deprecation warnings regarding promises
+    process.env.NTBA_FIX_319 = '1';
+
     this.allowedChatIds = (process.env.MONITOR_CHAT_IDS || '')
       .split(',')
       .map(id => parseInt(id.trim()))
       .filter(id => !isNaN(id));
 
-    this.bot = new TelegramBot(token, { polling: true });
+    this.bot = new TelegramBot(token, {
+      polling: {
+        interval: 300,
+        autoStart: true,
+        params: {
+          timeout: 10
+        }
+      },
+      request: {
+        agentOptions: {
+          keepAlive: true,
+          family: 4 // Force IPv4, sometimes IPv6 on cloud VMs causes timeout/EFATAL
+        }
+      }
+    });
     this.processor = new ImageProcessor();
     this.excelGen = new ExcelGenerator();
 
