@@ -170,7 +170,8 @@ export class BotApp {
               chat_id: chatId,
               message_id: sentMsg.message_id,
               text: `正在识别第 ${i + 1} / ${total} 张...`
-            })
+            }),
+            agent: new (require('https').Agent)({ family: 4 })
           });
         } catch (e) {
           // ignore edit message error (e.g. same text)
@@ -190,7 +191,8 @@ export class BotApp {
         let getFileRes;
         try {
           getFileRes = await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${task.file_id}`, {
-            signal: controller1.signal
+            signal: controller1.signal,
+            agent: new (require('https').Agent)({ family: 4 }) // Force IPv4, often the root cause of ETIMEDOUT on cloud providers
           });
         } finally {
           clearTimeout(timeout1);
@@ -217,7 +219,10 @@ export class BotApp {
         
         let response;
         try {
-          response = await nodeFetch(fileUrl, { signal: controller2.signal });
+          response = await nodeFetch(fileUrl, { 
+            signal: controller2.signal,
+            agent: new (require('https').Agent)({ family: 4 })
+          });
         } finally {
           clearTimeout(timeout2);
         }
@@ -258,7 +263,8 @@ export class BotApp {
             chat_id: chatId,
             message_id: sentMsg.message_id,
             text: `✅ 全部识别完毕！成功 ${successCount} 张 / 失败 ${failCount} 张，正在生成汇总表格…`
-          })
+          }),
+          agent: new (require('https').Agent)({ family: 4 })
         });
       } catch (e) {}
     }
