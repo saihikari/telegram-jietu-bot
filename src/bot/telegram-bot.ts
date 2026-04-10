@@ -32,7 +32,7 @@ export class BotApp {
 
     this.bot = new TelegramBot(token, {
       polling: {
-        interval: 300,
+        interval: 1000, // Increase polling interval to reduce connection drop issues
         autoStart: true,
         params: {
           timeout: 10
@@ -41,7 +41,7 @@ export class BotApp {
       request: {
         agentOptions: {
           keepAlive: true,
-          family: 4 // Force IPv4, sometimes IPv6 on cloud VMs causes timeout/EFATAL
+          family: 4 
         }
       } as any
     });
