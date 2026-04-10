@@ -5,22 +5,21 @@ import { getSettings } from '../utils/config';
 import { AdData, ImageTask } from '../types';
 import logger from '../utils/logger';
 
+// remove getClient as it's no longer used
 export class ImageProcessor {
-  private getClient(): OpenAI {
-    const settings = getSettings();
-    return new OpenAI({
-      apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
-      baseURL: process.env.LLM_BASE_URL || settings.llm.baseUrl,
-    });
-  }
-
   public async processImage(task: ImageTask): Promise<AdData[]> {
     if (!task.localPath || !fs.existsSync(task.localPath)) {
       throw new Error(`Image not found: ${task.localPath}`);
     }
 
     const settings = getSettings();
-    const client = this.getClient();
+    // Use the native fetch without undici overrides for OpenAI API calls
+    const fetchToUse = globalThis.fetch;
+    const client = new OpenAI({
+      apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
+      baseURL: process.env.LLM_BASE_URL || settings.llm.baseUrl,
+      fetch: fetchToUse
+    });
     
     try {
       const base64Image = fs.readFileSync(task.localPath, 'base64');
