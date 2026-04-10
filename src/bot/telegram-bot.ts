@@ -186,7 +186,9 @@ export class BotApp {
         
         let response;
         try {
-          response = await fetch(fileUrl, { signal: controller.signal });
+          // Use node-fetch to completely bypass undici ETIMEDOUT bugs on cloud instances
+          const nodeFetch = require('node-fetch');
+          response = await nodeFetch(fileUrl, { signal: controller.signal });
         } finally {
           clearTimeout(timeoutId);
         }
