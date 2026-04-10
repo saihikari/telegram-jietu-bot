@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+temp/
+logs/
+config/backups/
+config/settings.json
+.DS_Store
+*.xlsx
