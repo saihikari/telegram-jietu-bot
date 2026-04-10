@@ -5,23 +5,27 @@ echo "=========================================="
 echo "部署截图机器人 (Node.js) 到 /root/telegram-jietu-bot/"
 echo "=========================================="
 
-# 1. 安装 Node.js 20.x (强制使用通用兼容方式，避免 NodeSource 脚本的误判)
-echo "正在安装 Node.js 20.x..."
-if command -v dnf &> /dev/null; then
-    dnf module install -y nodejs:20 || (curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && dnf install -y nodejs)
-elif command -v yum &> /dev/null; then
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && yum install -y nodejs
-elif command -v apt-get &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
+# 1. 手动编译安装/二进制包安装 Node.js 20.x (彻底绕过 NodeSource)
+echo "正在检测/安装 Node.js 20.x..."
+if ! command -v node &> /dev/null; then
+    NODE_VERSION="v20.12.2"
+    NODE_DIST="node-${NODE_VERSION}-linux-x64"
+    cd /tmp
+    wget https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz
+    tar -xvf ${NODE_DIST}.tar.xz
+    cp -r ${NODE_DIST}/* /usr/local/
+    rm -rf ${NODE_DIST} ${NODE_DIST}.tar.xz
+    echo "Node.js 20.x 安装成功！版本："
+    node -v
 else
-    echo "未能检测到受支持的包管理器 (dnf/yum/apt-get)。"
-    exit 1
+    echo "检测到 Node.js 已安装，版本："
+    node -v
 fi
 
 # 2. 安装 pnpm
 npm install -g pnpm
 
-# 3. 创建应用目录
+# 3. 切换回应用目录
 mkdir -p /root/telegram-jietu-bot
 cd /root/telegram-jietu-bot
 
@@ -60,10 +64,11 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/telegram-jietu-bot
-ExecStart=/usr/bin/pnpm start
+ExecStart=/usr/local/bin/pnpm start
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target
