@@ -9,18 +9,35 @@ import https from 'https';
 // Create a custom HTTPS agent to bypass strict HTTP/2 handling issues in some Node.js versions
 const httpsAgent = new https.Agent({
   keepAlive: true,
-  rejectUnauthorized: false // Sometimes proxy certs cause issues
+  rejectUnauthorized: false, // Sometimes proxy certs cause issues
+  family: 4 // Force IPv4
 });
 
 // Use native node-fetch like behavior but via a wrapper that enforces the custom agent
-const customFetch = async (url: any, init?: any): Promise<any> => {
+const customFetch = async (url: any, init: any): Promise<any> => {
   const options = {
     ...init,
-    agent: httpsAgent
+    agent: httpsAgent,
+    // Add extra headers to avoid ChatAnywhere 405 or interception
+    headers: {
+      ...init?.headers,
+      'Accept': 'application/json',
+      'User-Agent': 'OpenAI/NodeJS/4.104.0'
+    }
   };
   // We use node-fetch under the hood which is what OpenAI SDK expects
   const nodeFetch = require('node-fetch');
-  return nodeFetch(url, options);
+  
+  // Force IPv4 in node-fetch options by modifying the underlying http.request options
+  options.family = 4;
+  try {
+    logger.info(`[customFetch] Executing fetch to ${url} with method ${init?.method || 'GET'}`);
+    const res = await nodeFetch(url, options);
+    return res;
+  } catch (err: any) {
+    logger.error(`[customFetch] Error: ${err.message}`, err);
+    throw err;
+  }
 };
 
 // remove getClient as it's no longer used
@@ -31,19 +48,13 @@ export class ImageProcessor {
     }
 
     const settings = getSettings();
-    // Use our custom fetch with custom https.Agent
-    const client = new OpenAI({
-      apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
-      baseURL: process.env.LLM_BASE_URL || settings.llm.baseUrl,
-      fetch: customFetch as any
-    });
     
     try {
       const base64Image = fs.readFileSync(task.localPath, 'base64');
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
-      // Optional: Log LLM configuration for debugging
-      logger.info(`[LLM Config] Calling LLM API via ${client.baseURL} with model ${settings.llm.model}`);
+      const safeBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl).replace(/\/$/, '');
+      logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${settings.llm.model}`);
 
       // We pass an abort signal to the fetch call inside openai to prevent hanging
       const controller = new AbortController();
@@ -52,6 +63,13 @@ export class ImageProcessor {
       let response;
       try {
         logger.info(`[LLM Request] Starting request to OpenAI API...`);
+        
+        const client = new OpenAI({
+          apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
+          baseURL: safeBaseUrl,
+          fetch: customFetch as any
+        });
+        
         response = await client.chat.completions.create({
           model: process.env.LLM_MODEL || settings.llm.model,
           messages: [
