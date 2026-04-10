@@ -26,19 +26,31 @@ export class ImageProcessor {
       const base64Image = fs.readFileSync(task.localPath, 'base64');
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
-      const response = await client.chat.completions.create({
-        model: process.env.LLM_MODEL || settings.llm.model,
-        messages: [
-          { role: "system", content: settings.llm.systemPrompt },
-          { role: "user", content: [
-            { type: "text", text: "请识别这张截图中的广告数据：" },
-            { type: "image_url", image_url: { url: dataUrl } }
-          ] }
-        ],
-        max_tokens: settings.llm.maxTokens,
-        temperature: settings.llm.temperature,
-        response_format: { type: "json_object" }
-      });
+      // Optional: Log LLM configuration for debugging
+      logger.info(`Calling LLM API via ${client.baseURL} with model ${settings.llm.model}`);
+
+      // We pass an abort signal to the fetch call inside openai to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+      let response;
+      try {
+        response = await client.chat.completions.create({
+          model: process.env.LLM_MODEL || settings.llm.model,
+          messages: [
+            { role: "system", content: settings.llm.systemPrompt },
+            { role: "user", content: [
+              { type: "text", text: "请识别这张截图中的广告数据：" },
+              { type: "image_url", image_url: { url: dataUrl } }
+            ] }
+          ],
+          max_tokens: settings.llm.maxTokens,
+          temperature: settings.llm.temperature,
+          response_format: { type: "json_object" }
+        }, { signal: controller.signal as any });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const content = response.choices[0]?.message?.content;
       if (!content) {

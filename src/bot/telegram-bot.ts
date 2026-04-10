@@ -167,16 +167,30 @@ export class BotApp {
       }
 
       try {
-        // Download file
+        // Get File path from Telegram
         const file = await this.bot.getFile(task.file_id);
         const tempDir = path.join(__dirname, '../../temp');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
         
         const localPath = path.join(tempDir, `${task.message_id}_${Date.now()}.jpg`);
-        const fileStream = fs.createWriteStream(localPath);
         
+        // Download file with increased timeout and custom dispatcher if needed
         const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
-        const response = await fetch(fileUrl);
+        
+        // Node 18+ native fetch. We pass an abort signal to avoid infinite hanging.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        let response;
+        try {
+          response = await fetch(fileUrl, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        
+        if (!response.ok) {
+           throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         fs.writeFileSync(localPath, buffer);
