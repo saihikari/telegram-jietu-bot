@@ -81,14 +81,21 @@ systemctl enable telegram-jietu-bot
 if command -v ufw &> /dev/null; then
     ufw allow 8070/tcp
 elif command -v firewall-cmd &> /dev/null; then
-    firewall-cmd --permanent --add-port=8070/tcp
-    firewall-cmd --reload
+    # OpenCloudOS 如果 firewalld 没有运行，命令会报错导致 set -e 退出
+    if systemctl is-active --quiet firewalld; then
+        firewall-cmd --permanent --add-port=8070/tcp
+        firewall-cmd --reload
+    else
+        echo "FirewallD 未运行，跳过防火墙端口配置。"
+    fi
 fi
 
 # 9. 启动服务
 systemctl start telegram-jietu-bot
 
-echo "部署完成！"
+echo "=========================================="
+echo "✅ 部署完成！"
 systemctl status telegram-jietu-bot --no-pager
 echo "管理界面：http://<服务器IP>:8070/admin/config"
 echo "状态页面：http://<服务器IP>:8070/admin/status"
+echo "=========================================="
