@@ -43,7 +43,7 @@ export class ImageProcessor {
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
       // Optional: Log LLM configuration for debugging
-      logger.info(`Calling LLM API via ${client.baseURL} with model ${settings.llm.model}`);
+      logger.info(`[LLM Config] Calling LLM API via ${client.baseURL} with model ${settings.llm.model}`);
 
       // We pass an abort signal to the fetch call inside openai to prevent hanging
       const controller = new AbortController();
@@ -51,8 +51,7 @@ export class ImageProcessor {
 
       let response;
       try {
-        // OpenAI SDK uses node-fetch internally which defaults to node 18's fetch.
-        // The fetch options pass an abort signal.
+        logger.info(`[LLM Request] Starting request to OpenAI API...`);
         response = await client.chat.completions.create({
           model: process.env.LLM_MODEL || settings.llm.model,
           messages: [
@@ -66,9 +65,19 @@ export class ImageProcessor {
           temperature: settings.llm.temperature,
           response_format: { type: "json_object" }
         }, { signal: controller.signal as any });
+        logger.info(`[LLM Response] Received response successfully.`);
       } catch (err: any) {
         // Provide more detailed info for Connection Error
-        logger.error(`OpenAI Connection Error Details: URL=${client.baseURL}, Key Length=${client.apiKey?.length}, Error=${err.message}`);
+        logger.error(`[LLM Error] API Call Failed!`);
+        logger.error(`[LLM Error Details] Name: ${err.name}, Message: ${err.message}`);
+        if (err.response) {
+           logger.error(`[LLM Error Status] ${err.response.status}`);
+           logger.error(`[LLM Error Data] ${JSON.stringify(err.response.data || err.response)}`);
+        }
+        if (err.cause) {
+           logger.error(`[LLM Error Cause] ${JSON.stringify(err.cause)}`);
+        }
+        logger.error(`[LLM Error Stack] ${err.stack}`);
         throw err;
       } finally {
         clearTimeout(timeoutId);

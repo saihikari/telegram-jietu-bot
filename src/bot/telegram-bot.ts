@@ -171,14 +171,14 @@ export class BotApp {
       }
 
       try {
-        // Get File path from Telegram
+        logger.info(`[Step 1] Getting file path from Telegram for file_id: ${task.file_id}`);
         const file = await this.bot.getFile(task.file_id);
         const tempDir = path.join(__dirname, '../../temp');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
         
         const localPath = path.join(tempDir, `${task.message_id}_${Date.now()}.jpg`);
         
-        // Download file with increased timeout and IPv4 forced fetch if needed
+        logger.info(`[Step 2] Downloading image from Telegram: ${file.file_path}`);
         const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
         
         const controller = new AbortController();
@@ -186,25 +186,27 @@ export class BotApp {
         
         let response;
         try {
-          // Use undici fetch with forced IPv4 (family: 4) which is often the cause of ETIMEDOUT on cloud providers
-          response = await fetch(fileUrl, { 
-            signal: controller.signal
-          });
+          response = await fetch(fileUrl, { signal: controller.signal });
         } finally {
           clearTimeout(timeoutId);
         }
         
         if (!response.ok) {
-           throw new Error(`Failed to fetch image: ${response.statusText}`);
+           throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
         }
+        
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         fs.writeFileSync(localPath, buffer);
         
         task.localPath = localPath;
+        logger.info(`[Step 3] Image downloaded successfully: ${localPath} (Size: ${buffer.length} bytes)`);
 
         // Process with LLM
+        logger.info(`[Step 4] Sending image to LLM processor...`);
         task.result = await this.processor.processImage(task);
+        logger.info(`[Step 5] LLM processing completed successfully.`);
+        
         task.status = 'completed';
         successCount++;
         botStats.processedCount++;
