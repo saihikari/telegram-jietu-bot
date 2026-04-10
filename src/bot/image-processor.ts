@@ -4,6 +4,24 @@ import { OpenAI } from 'openai';
 import { getSettings } from '../utils/config';
 import { AdData, ImageTask } from '../types';
 import logger from '../utils/logger';
+import https from 'https';
+
+// Create a custom HTTPS agent to bypass strict HTTP/2 handling issues in some Node.js versions
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  rejectUnauthorized: false // Sometimes proxy certs cause issues
+});
+
+// Use native node-fetch like behavior but via a wrapper that enforces the custom agent
+const customFetch = async (url: RequestInfo, init?: RequestInit): Promise<Response> => {
+  const options = {
+    ...init,
+    agent: httpsAgent
+  };
+  // We use node-fetch under the hood which is what OpenAI SDK expects
+  const nodeFetch = require('node-fetch');
+  return nodeFetch(url, options);
+};
 
 // remove getClient as it's no longer used
 export class ImageProcessor {
@@ -13,12 +31,11 @@ export class ImageProcessor {
     }
 
     const settings = getSettings();
-    // Use the native fetch without undici overrides for OpenAI API calls
-    const fetchToUse = globalThis.fetch;
+    // Use our custom fetch with custom https.Agent
     const client = new OpenAI({
       apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
       baseURL: process.env.LLM_BASE_URL || settings.llm.baseUrl,
-      fetch: fetchToUse
+      fetch: customFetch as any
     });
     
     try {
