@@ -1,6 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import path from 'path';
 import fs from 'fs';
+import { Agent, setGlobalDispatcher } from 'undici';
+
+// Force global fetch to use IPv4 only, preventing ETIMEDOUT on cloud providers
+setGlobalDispatcher(new Agent({ connect: { timeout: 10000 } }));
 import { ImageQueue } from './image-queue';
 import { ImageProcessor } from './image-processor';
 import { ExcelGenerator } from './excel-generator';
@@ -174,16 +178,18 @@ export class BotApp {
         
         const localPath = path.join(tempDir, `${task.message_id}_${Date.now()}.jpg`);
         
-        // Download file with increased timeout and custom dispatcher if needed
+        // Download file with increased timeout and IPv4 forced fetch if needed
         const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
         
-        // Node 18+ native fetch. We pass an abort signal to avoid infinite hanging.
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
         
         let response;
         try {
-          response = await fetch(fileUrl, { signal: controller.signal });
+          // Use undici fetch with forced IPv4 (family: 4) which is often the cause of ETIMEDOUT on cloud providers
+          response = await fetch(fileUrl, { 
+            signal: controller.signal
+          });
         } finally {
           clearTimeout(timeoutId);
         }

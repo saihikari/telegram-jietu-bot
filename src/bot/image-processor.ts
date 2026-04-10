@@ -31,7 +31,7 @@ export class ImageProcessor {
 
       // We pass an abort signal to the fetch call inside openai to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for LLM
 
       let response;
       try {
@@ -66,8 +66,6 @@ export class ImageProcessor {
         throw new Error(`Failed to parse LLM response as JSON: ${content}`);
       }
 
-      // Check if response has an array format like { "data": [...] } or is just an array.
-      // We asked for an array, but with json_object it might return { "results": [...] } or similar.
       let resultData: AdData[] = [];
       if (Array.isArray(parsed)) {
         resultData = parsed;
@@ -81,7 +79,6 @@ export class ImageProcessor {
         }
         if (resultData.length === 0) {
            logger.warn(`Could not find an array in the JSON object: ${JSON.stringify(parsed)}`);
-           // Fallback to return empty array
         }
       }
       
