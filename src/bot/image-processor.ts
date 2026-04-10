@@ -13,7 +13,7 @@ const httpsAgent = new https.Agent({
 });
 
 // Use native node-fetch like behavior but via a wrapper that enforces the custom agent
-const customFetch = async (url: RequestInfo, init?: RequestInit): Promise<Response> => {
+const customFetch = async (url: any, init?: any): Promise<any> => {
   const options = {
     ...init,
     agent: httpsAgent
