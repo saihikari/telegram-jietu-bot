@@ -161,9 +161,16 @@ export class BotApp {
       // Update progress message
       if (sentMsg) {
         try {
-          await this.bot.editMessageText(`正在识别第 ${i + 1} / ${total} 张...`, {
-            chat_id: chatId,
-            message_id: sentMsg.message_id
+          // Use node-fetch to completely bypass undici ETIMEDOUT bugs when editing messages
+          const nodeFetch = require('node-fetch');
+          await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              message_id: sentMsg.message_id,
+              text: `正在识别第 ${i + 1} / ${total} 张...`
+            })
           });
         } catch (e) {
           // ignore edit message error (e.g. same text)
@@ -243,9 +250,15 @@ export class BotApp {
 
     if (sentMsg) {
       try {
-        await this.bot.editMessageText(`✅ 全部识别完毕！成功 ${successCount} 张 / 失败 ${failCount} 张，正在生成汇总表格…`, {
-          chat_id: chatId,
-          message_id: sentMsg.message_id
+        const nodeFetch = require('node-fetch');
+        await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            message_id: sentMsg.message_id,
+            text: `✅ 全部识别完毕！成功 ${successCount} 张 / 失败 ${failCount} 张，正在生成汇总表格…`
+          })
         });
       } catch (e) {}
     }
