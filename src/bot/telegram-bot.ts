@@ -54,8 +54,13 @@ export class BotApp {
       }
     });
 
-    this.bot.on('polling_error', (error) => {
-      logger.error('Telegram Polling Error:', error);
+    this.bot.on('polling_error', (error: any) => {
+      // Avoid printing full stack trace for known network errors to reduce log noise
+      if (error.code === 'EFATAL' || error.message?.includes('network')) {
+        logger.error(`Telegram Polling Network Error: ${error.message || error.code}`);
+      } else {
+        logger.error('Telegram Polling Error:', error);
+      }
     });
   }
 
