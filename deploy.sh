@@ -6,21 +6,25 @@ echo "部署截图机器人 (Node.js) 到 /root/telegram-jietu-bot/"
 echo "=========================================="
 
 # 1. 安装 Node.js 20.x (自动识别系统)
-if command -v apt-get &> /dev/null; then
+# 避免直接用 `command -v` 检测到其它系统的残留命令而导致进入错误的安装分支。
+if [ -f /etc/debian_version ]; then
     echo "检测到 Ubuntu/Debian 系统..."
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
-elif command -v dnf &> /dev/null; then
-    echo "检测到 OpenCloudOS/CentOS 8+/Fedora 系统..."
+elif [ -f /etc/redhat-release ]; then
+    echo "检测到 RedHat/CentOS/OpenCloudOS 系统..."
     curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-    dnf install -y nodejs
-elif command -v yum &> /dev/null; then
-    echo "检测到 CentOS 7 系统..."
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-    yum install -y nodejs
+    if command -v dnf &> /dev/null; then
+        dnf install -y nodejs
+    else
+        yum install -y nodejs
+    fi
 else
-    echo "未知的包管理器，请手动安装 Node.js 20.x"
-    exit 1
+    echo "未知系统类型，尝试通过通用方式安装 Node.js..."
+    # 如果以上都不是，可能是一个自定义系统，尝试直接装一下
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - || curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    if command -v yum &> /dev/null; then yum install -y nodejs; fi
+    if command -v apt-get &> /dev/null; then apt-get install -y nodejs; fi
 fi
 
 # 2. 安装 pnpm
