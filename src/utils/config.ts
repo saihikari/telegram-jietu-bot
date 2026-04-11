@@ -24,6 +24,9 @@ const DEFAULT_SETTINGS: Settings = {
   ui: {
     pageTitle: "截图机器人管理后台",
     companyFooter: "机器人系统由RuntoAds技术团队提供支持"
+  },
+  integration: {
+    reportBotWebhookUrl: ""
   }
 };
 

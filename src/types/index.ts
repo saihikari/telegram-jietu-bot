@@ -17,6 +17,9 @@ export interface Settings {
     pageTitle: string;
     companyFooter: string;
   };
+  integration?: {
+    reportBotWebhookUrl?: string;
+  };
 }
 
 export interface ImageTask {

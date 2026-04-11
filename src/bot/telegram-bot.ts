@@ -89,8 +89,36 @@ export class BotApp {
       const messageId = query.message?.message_id;
       if (!chatId || !messageId) return;
 
-      if (query.data === 'call_report_bot') {
-        await this.bot.sendMessage(chatId, '👉 因为机器人无法直接触发另一个机器人，请您**手动转发**上面的 Excel 文件到本群，即可呼唤日报机器人为您处理！', { parse_mode: 'Markdown' });
+      if (query.data?.startsWith('call_report_bot:')) {
+        const filename = query.data.split(':')[1];
+        const excelPath = path.join(__dirname, '../../temp', filename);
+        
+        const settings = getSettings();
+        const webhookUrl = process.env.REPORT_BOT_WEBHOOK_URL || settings.integration?.reportBotWebhookUrl;
+
+        if (webhookUrl) {
+          try {
+            const nodeFetch = require('node-fetch');
+            await nodeFetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: 'new_excel_report',
+                chatId: chatId,
+                filePath: excelPath,
+                filename: filename
+              }),
+              timeout: 5000
+            });
+            await this.bot.sendMessage(chatId, '✅ 已经成功通过内网将 Excel 数据投递给日报机器人！请稍候它会在群里给您回复。', { parse_mode: 'Markdown' });
+          } catch (e: any) {
+            logger.error(`Failed to call report bot webhook: ${e.message}`);
+            await this.bot.sendMessage(chatId, '❌ 投递给日报机器人失败，可能是对方接口未开启或配置错误。', { parse_mode: 'Markdown' });
+          }
+        } else {
+          await this.bot.sendMessage(chatId, '⚠️ 日报机器人的互通接口尚未配置，请在后台或环境变量中设置 `REPORT_BOT_WEBHOOK_URL`。', { parse_mode: 'Markdown' });
+        }
+
         // Remove the inline keyboard after selection
         await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
         await this.bot.answerCallbackQuery(query.id);
@@ -291,13 +319,15 @@ export class BotApp {
 
     try {
       const excelPath = await this.excelGen.generateExcel(tasks);
+      const filename = path.basename(excelPath);
+      
       await this.bot.sendDocument(chatId, excelPath, {
         caption: '✅ 汇总与明细数据已生成！\n\n**是否呼唤日报机器人自动做日报？**',
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🤖 1. 机器人做', callback_data: 'call_report_bot' },
+              { text: '🤖 1. 机器人做', callback_data: `call_report_bot:${filename}` },
               { text: '🙋 2. 自己做', callback_data: 'do_it_manually' }
             ]
           ]
