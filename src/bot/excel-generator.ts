@@ -86,7 +86,9 @@ export class ExcelGenerator {
 
       if (task.localPath && fs.existsSync(task.localPath)) {
         try {
-          const dimensions = imageSize(task.localPath);
+          // Read file buffer first to pass to both imageSize and workbook.addImage
+          const imgBuffer = fs.readFileSync(task.localPath);
+          const dimensions = imageSize(imgBuffer);
           if (dimensions.width && dimensions.height) {
             // 10列的宽度约为 840 像素
             const maxWidthPx = 840;
@@ -105,7 +107,7 @@ export class ExcelGenerator {
           }
 
           const imageId = workbook.addImage({
-            buffer: fs.readFileSync(task.localPath) as any,
+            buffer: imgBuffer as any,
             extension: 'jpeg'
           });
 
