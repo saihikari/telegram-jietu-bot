@@ -75,6 +75,9 @@ adminRouter.get('/config', (req, res) => {
           <label>System Prompt:</label>
           <textarea id="llm_systemPrompt" rows="8" required>${settings.llm.systemPrompt}</textarea>
           
+          <label>互通接口地址 (Webhook) - 留空表示不开启投递:</label>
+          <input type="text" id="reportBotWebhookUrl" value="${settings.integration?.reportBotWebhookUrl || ''}" placeholder="例如: http://127.0.0.1:8080/api/receive-excel">
+          
           <button type="button" onclick="saveConfig()">保存并生效</button>
           <button type="button" onclick="backupConfig()" style="background: #28a745;">备份当前配置</button>
         </form>
@@ -100,6 +103,9 @@ adminRouter.get('/config', (req, res) => {
             ui: {
               pageTitle: "${settings.ui.pageTitle}",
               companyFooter: "${settings.ui.companyFooter}"
+            },
+            integration: {
+              reportBotWebhookUrl: document.getElementById('reportBotWebhookUrl').value
             }
           };
           
