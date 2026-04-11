@@ -6,7 +6,7 @@ import logger from './logger';
 const CONFIG_PATH = path.join(__dirname, '../../config/settings.json');
 const BACKUPS_DIR = path.join(__dirname, '../../config/backups');
 
-const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   idle_timeout_seconds: 10,
   llm: {
     provider: "openai",

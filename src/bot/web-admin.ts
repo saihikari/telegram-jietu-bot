@@ -72,7 +72,7 @@ adminRouter.get('/config', (req, res) => {
           <label>Model:</label>
           <input type="text" id="llm_model" value="${settings.llm.model}" required>
           
-          <label>System Prompt:</label>
+          <label>System Prompt: <button type="button" onclick="resetPrompt()" style="font-size: 12px; padding: 2px 8px; margin-left: 10px; background: #dc3545;">获取系统最新默认提示词</button></label>
           <textarea id="llm_systemPrompt" rows="8" required>${settings.llm.systemPrompt}</textarea>
           
           <label>互通接口地址 (Webhook) - 留空表示不开启投递:</label>
@@ -123,10 +123,23 @@ adminRouter.get('/config', (req, res) => {
           if(res.ok) alert('备份成功！');
           else alert('备份失败！');
         }
+
+        async function resetPrompt() {
+          if (confirm('确定要获取系统内置的最新的、经过防错优化的 System Prompt 吗？\\n这将会覆盖输入框里的内容（但你需要点击“保存并生效”才会真正保存）。')) {
+            const res = await fetch('/admin/api/default-prompt');
+            const data = await res.json();
+            document.getElementById('llm_systemPrompt').value = data.prompt;
+          }
+        }
       </script>
     </body>
     </html>
   `);
+});
+
+adminRouter.get('/api/default-prompt', (req, res) => {
+  const { DEFAULT_SETTINGS } = require('../utils/config');
+  res.json({ prompt: DEFAULT_SETTINGS.llm.systemPrompt });
 });
 
 adminRouter.get('/status', (req, res) => {
