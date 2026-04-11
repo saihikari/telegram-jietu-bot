@@ -83,6 +83,24 @@ export class BotApp {
         logger.error('Telegram Polling Error:', error);
       }
     });
+
+    this.bot.on('callback_query', async (query) => {
+      const chatId = query.message?.chat.id;
+      const messageId = query.message?.message_id;
+      if (!chatId || !messageId) return;
+
+      if (query.data === 'call_report_bot') {
+        await this.bot.sendMessage(chatId, '👉 因为机器人无法直接触发另一个机器人，请您**手动转发**上面的 Excel 文件到本群，即可呼唤日报机器人为您处理！', { parse_mode: 'Markdown' });
+        // Remove the inline keyboard after selection
+        await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
+        await this.bot.answerCallbackQuery(query.id);
+      } else if (query.data === 'do_it_manually') {
+        await this.bot.sendMessage(chatId, '👌 好的，流程结束，辛苦啦！');
+        // Remove the inline keyboard after selection
+        await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
+        await this.bot.answerCallbackQuery(query.id);
+      }
+    });
   }
 
   private getQueue(chatId: number): ImageQueue {
@@ -274,7 +292,16 @@ export class BotApp {
     try {
       const excelPath = await this.excelGen.generateExcel(tasks);
       await this.bot.sendDocument(chatId, excelPath, {
-        caption: '汇总与明细数据'
+        caption: '✅ 汇总与明细数据已生成！\n\n**是否呼唤日报机器人自动做日报？**',
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🤖 1. 机器人做', callback_data: 'call_report_bot' },
+              { text: '🙋 2. 自己做', callback_data: 'do_it_manually' }
+            ]
+          ]
+        }
       });
       
       // Clean up files
