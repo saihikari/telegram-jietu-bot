@@ -68,7 +68,11 @@ export class ExcelGenerator {
       }
     });
 
-    const summaryList = Object.values(summaryMap).sort((a, b) => a.日报sheet.localeCompare(b.日报sheet) || a.渠道名.localeCompare(b.渠道名));
+    // 按第一列（日报sheet）升序排序，如果相同则按第二列（渠道名）升序排序，并启用自然数排序（让 "2" 排在 "10" 前面）
+    const summaryList = Object.values(summaryMap).sort((a, b) => {
+      return a.日报sheet.localeCompare(b.日报sheet, undefined, { numeric: true }) || 
+             a.渠道名.localeCompare(b.渠道名, undefined, { numeric: true });
+    });
     summaryList.forEach(item => {
       summarySheet.addRow({
         sheetName: item.日报sheet,
