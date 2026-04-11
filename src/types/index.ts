@@ -24,6 +24,7 @@ export interface ImageTask {
   file_id: string;
   chat_id: number;
   timestamp: number;
+  caption?: string; // Add caption for the image
   localPath?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   result?: AdData[];

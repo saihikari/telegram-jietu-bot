@@ -104,6 +104,7 @@ export class BotApp {
       file_id: photo.file_id,
       chat_id: chatId,
       timestamp: msg.date,
+      caption: msg.caption || '', // Capture the caption if it exists
       status: 'pending'
     };
 

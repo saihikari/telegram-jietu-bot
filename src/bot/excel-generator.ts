@@ -92,7 +92,8 @@ export class ExcelGenerator {
 
     tasks.forEach((task, idx) => {
       const rowIndex = idx + 2; // header is row 1
-      const filename = path.basename(task.localPath || `unknown_${task.message_id}.jpg`);
+      // Use caption if available, otherwise fallback to an empty string instead of meaningless filename
+      const filename = task.caption ? task.caption : '';
       
       let resultText = "识别失败或无有效数据";
       if (task.result && task.result.length > 0) {
@@ -134,7 +135,8 @@ export class ExcelGenerator {
             
             imgWidth = finalWidthPx;
             imgHeight = finalHeightPx;
-            rowHeightPoints = finalHeightPx * 0.75; // px 转 points
+            // Add a small buffer to the row height to ensure the image fits within the cell bounds without getting cut off or hidden
+            rowHeightPoints = (finalHeightPx * 0.75) + 5; // px 转 points + 5 points buffer
             
             if (imgWidth > maxImageWidth) {
               maxImageWidth = imgWidth;
@@ -146,8 +148,10 @@ export class ExcelGenerator {
             extension: 'jpeg'
           });
           
+          // Using editAs 'absolute' or 'oneCell' to ensure images are placed correctly
+          // but more importantly, specifying padding/margins in the extension or keeping row height slightly larger than the image
           detailSheet.addImage(imageId, {
-            tl: { col: 2, row: rowIndex - 1 },
+            tl: { col: 2, row: rowIndex - 1 }, // col 2 is 0-indexed for col C ('image')
             ext: { width: imgWidth, height: imgHeight },
             editAs: 'oneCell'
           });
