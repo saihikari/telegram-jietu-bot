@@ -175,12 +175,12 @@ export class BotApp {
       this.bot.sendMessage(chatId, '✅ 机器人运行正常');
     } else if (text.startsWith('/help')) {
       const port = process.env.WEB_PORT || 8070;
-      const host = process.env.HOST || 'http://localhost';
+      const host = process.env.HOST || 'http://www.runtoads.top';
       const url = `${host}:${port}/admin/guide`;
       this.bot.sendMessage(chatId, `发送包含表格的广告截图到群里，我会自动识别并汇总。\n管理界面与帮助：${url}`);
     } else if (text.startsWith('/status')) {
       const port = process.env.WEB_PORT || 8070;
-      const host = process.env.HOST || 'http://localhost';
+      const host = process.env.HOST || 'http://www.runtoads.top';
       this.bot.sendMessage(chatId, `状态页：${host}:${port}/admin/status`);
     } else if (text.startsWith('/clear')) {
       const queue = this.getQueue(chatId);
