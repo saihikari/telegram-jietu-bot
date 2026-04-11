@@ -99,7 +99,7 @@ export class BotApp {
         if (webhookUrl) {
           try {
             const nodeFetch = require('node-fetch');
-            await nodeFetch(webhookUrl, {
+            const res = await nodeFetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -110,10 +110,15 @@ export class BotApp {
               }),
               timeout: 5000
             });
+            
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            }
+            
             await this.bot.sendMessage(chatId, '✅ 已经成功通过内网将 Excel 数据投递给日报机器人！请稍候它会在群里给您回复。', { parse_mode: 'Markdown' });
           } catch (e: any) {
             logger.error(`Failed to call report bot webhook: ${e.message}`);
-            await this.bot.sendMessage(chatId, '❌ 投递给日报机器人失败，可能是对方接口未开启或配置错误。', { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, `❌ 投递给日报机器人失败：${e.message}\n可能是对方接口未开启、或存在鉴权拦截。`, { parse_mode: 'Markdown' });
           }
         } else {
           await this.bot.sendMessage(chatId, '⚠️ 日报机器人的互通接口尚未配置，请在后台或环境变量中设置 `REPORT_BOT_WEBHOOK_URL`。', { parse_mode: 'Markdown' });
