@@ -339,15 +339,15 @@ export class BotApp {
         }
       });
       
-      // Clean up files
+      // Clean up image files
       tasks.forEach(t => {
         if (t.localPath && fs.existsSync(t.localPath)) {
           fs.unlinkSync(t.localPath);
         }
       });
-      if (fs.existsSync(excelPath)) {
-        fs.unlinkSync(excelPath);
-      }
+      // IMPORTANT: Do NOT delete the excelPath here. 
+      // It must persist on disk so the Report Bot can read it via webhook later.
+      // A cron job or the Report Bot should be responsible for cleaning up old excel files.
     } catch (e) {
       logger.error('Failed to generate or send excel', e);
       this.bot.sendMessage(chatId, '❌ 生成或发送 Excel 文件失败。');
