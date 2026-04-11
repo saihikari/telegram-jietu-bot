@@ -116,8 +116,8 @@ export class ExcelGenerator {
           // 插入图片
           // 使用 tl (top-left) 和 br (bottom-right) 的方式来锚定图片，这在很多 Excel 软件中兼容性更好
           detailSheet.addImage(imageId, {
-            tl: { col: 0, row: currentRow - 1 },
-            br: { col: 10, row: currentRow - 1 + spannedRows - 1 },
+            tl: { col: 0, row: currentRow - 1 } as any,
+            br: { col: 10, row: currentRow - 1 + spannedRows - 1 } as any,
             editAs: 'oneCell'
           });
         } catch (e) {
