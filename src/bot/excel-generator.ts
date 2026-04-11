@@ -109,15 +109,17 @@ export class ExcelGenerator {
             extension: 'jpeg'
           });
 
-          // 插入图片
-          detailSheet.addImage(imageId, {
-            tl: { col: 0, row: currentRow - 1 }, // 放置在A列，当前行
-            ext: { width: imgWidth, height: imgHeight }
-          });
-
           // 计算图片跨过的行数。默认行高约为 15 磅（20 像素）。
           // 给图片留一点边距，加 1 行
           spannedRows = Math.ceil(imgHeight / 20) + 1;
+
+          // 插入图片
+          // 使用 tl (top-left) 和 br (bottom-right) 的方式来锚定图片，这在很多 Excel 软件中兼容性更好
+          detailSheet.addImage(imageId, {
+            tl: { col: 0, row: currentRow - 1 },
+            br: { col: 10, row: currentRow - 1 + spannedRows - 1 },
+            editAs: 'oneCell'
+          });
         } catch (e) {
           logger.error(`Error adding image to excel for task ${task.message_id}`, e);
         }
