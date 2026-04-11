@@ -65,109 +65,114 @@ export class ExcelGenerator {
 
     // Sheet 2: Detail Data
     const detailSheet = workbook.addWorksheet('明细数据');
-    detailSheet.columns = [
-      { header: '第几张', key: 'index', width: 10 },
-      { header: '图片名称', key: 'filename', width: 20 },
-      { header: '截图', key: 'image', width: 40 }, // 初始宽度，后面会动态调整
-      { header: '识别结果', key: 'result', width: 60 }
-    ];
+    // 设置默认列宽为 12（大约能够显示10位数字，约 84 像素宽）
+    detailSheet.properties.defaultColWidth = 12;
 
-    // 美化明细表表头，居中显示
-    const detailHeader = detailSheet.getRow(1);
-    detailHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    detailHeader.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF4F81BD' } // 蓝色背景
-    };
-    detailHeader.alignment = { vertical: 'middle', horizontal: 'center' };
-
-    // 设置所有列居中
-    detailSheet.getColumn('index').alignment = { vertical: 'middle', horizontal: 'center' };
-    detailSheet.getColumn('filename').alignment = { vertical: 'middle', horizontal: 'center' };
-    detailSheet.getColumn('image').alignment = { vertical: 'middle', horizontal: 'center' };
-    detailSheet.getColumn('result').alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-
-    let maxImageWidth = 0;
+    let currentRow = 1;
 
     tasks.forEach((task, idx) => {
-      const rowIndex = idx + 2; // header is row 1
-      // Use caption if available, otherwise fallback to an empty string instead of meaningless filename
-      const filename = task.caption ? task.caption : '';
-      
-      let resultText = "识别失败或无有效数据";
-      if (task.result && task.result.length > 0) {
-        resultText = "名称 | 总消耗 | 总展示 | 总点击\n--------------------------------\n";
-        task.result.forEach(r => {
-          resultText += `${r.名称} | ${r.消耗} | ${r.展示} | ${r.点击}\n`;
-        });
-      }
-      
-      const row = detailSheet.addRow({
-        index: idx + 1,
-        filename: filename,
-        image: '',
-        result: resultText
-      });
+      // 1. 第 x 张 - [文字] - 截图及识别结果
+      const titleRow = detailSheet.getRow(currentRow);
+      const captionText = task.caption ? ` - [${task.caption}]` : '';
+      titleRow.getCell(1).value = `第${idx + 1}张${captionText} - 截图及识别结果`;
+      titleRow.getCell(1).font = { bold: true, size: 12 };
+      detailSheet.mergeCells(currentRow, 1, currentRow, 10);
+      currentRow++;
 
+      // 2. 插入图片，并计算图片跨多少行
       let imgWidth = 200;
       let imgHeight = 180;
-      let rowHeightPoints = 150;
+      let spannedRows = 10;
 
       if (task.localPath && fs.existsSync(task.localPath)) {
         try {
-          // 读取图片真实宽高
           const dimensions = sizeOf(task.localPath);
           if (dimensions.width && dimensions.height) {
-            // Excel 单行最大高度为 409 磅（约 546 像素）
-            const maxRowHeightPoints = 409;
-            const maxRowHeightPx = maxRowHeightPoints / 0.75; // 545.33px
-            
+            // 10列的宽度约为 840 像素
+            const maxWidthPx = 840;
             let finalWidthPx = dimensions.width;
             let finalHeightPx = dimensions.height;
-            
-            // 如果图片高度超过 Excel 允许的单行最大高度，则等比例缩放
-            if (finalHeightPx > maxRowHeightPx) {
-              const ratio = maxRowHeightPx / finalHeightPx;
-              finalHeightPx = maxRowHeightPx;
-              finalWidthPx = finalWidthPx * ratio;
+
+            // 如果图片宽度超过 10 列的像素宽度，等比例缩小
+            if (finalWidthPx > maxWidthPx) {
+              const ratio = maxWidthPx / finalWidthPx;
+              finalWidthPx = maxWidthPx;
+              finalHeightPx = finalHeightPx * ratio;
             }
-            
+
             imgWidth = finalWidthPx;
             imgHeight = finalHeightPx;
-            // Add a small buffer to the row height to ensure the image fits within the cell bounds without getting cut off or hidden
-            rowHeightPoints = (finalHeightPx * 0.75) + 5; // px 转 points + 5 points buffer
-            
-            if (imgWidth > maxImageWidth) {
-              maxImageWidth = imgWidth;
-            }
           }
-          
+
           const imageId = workbook.addImage({
             buffer: fs.readFileSync(task.localPath) as any,
             extension: 'jpeg'
           });
-          
-          // Using editAs 'absolute' or 'oneCell' to ensure images are placed correctly
-          // but more importantly, specifying padding/margins in the extension or keeping row height slightly larger than the image
+
+          // 插入图片
           detailSheet.addImage(imageId, {
-            tl: { col: 2, row: rowIndex - 1 }, // col 2 is 0-indexed for col C ('image')
+            tl: { col: 0, row: currentRow - 1 }, // 放置在A列，当前行
             ext: { width: imgWidth, height: imgHeight },
             editAs: 'oneCell'
           });
+
+          // 计算图片跨过的行数。默认行高约为 15 磅（20 像素）。
+          // 给图片留一点边距，加 1 行
+          spannedRows = Math.ceil(imgHeight / 20) + 1;
         } catch (e) {
           logger.error(`Error adding image to excel for task ${task.message_id}`, e);
         }
       }
 
-      row.height = rowHeightPoints; // 根据图片高度设置行高
-    });
+      // 跳过图片占据的行数
+      currentRow += spannedRows;
 
-    // 动态调整第三列（截图列）的宽度
-    // Excel 列宽 1 个单位约为 7.5 像素，为了留点边距加上 2 个单位
-    if (maxImageWidth > 0) {
-      detailSheet.getColumn('image').width = Math.ceil(maxImageWidth / 7.5) + 2;
-    }
+      // 3. 打印识别结果表头
+      const headerRow = detailSheet.getRow(currentRow);
+      headerRow.values = ['名称', '消耗', '展示', '点击'];
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      for (let i = 1; i <= 4; i++) {
+        headerRow.getCell(i).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF4F81BD' } // 蓝色背景
+        };
+      }
+      currentRow++;
+
+      // 4. 打印识别结果数据
+      if (task.result && task.result.length > 0) {
+        task.result.forEach(r => {
+          const dataRow = detailSheet.getRow(currentRow);
+          dataRow.getCell(1).value = r.名称;
+          dataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+          
+          dataRow.getCell(2).value = Number(r.消耗) || 0;
+          dataRow.getCell(2).numFmt = '#,##0.00';
+          dataRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+          
+          dataRow.getCell(3).value = Number(r.展示) || 0;
+          dataRow.getCell(3).numFmt = '#,##0';
+          dataRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+          
+          dataRow.getCell(4).value = Number(r.点击) || 0;
+          dataRow.getCell(4).numFmt = '#,##0';
+          dataRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+          
+          currentRow++;
+        });
+      } else {
+        const noDataRow = detailSheet.getRow(currentRow);
+        noDataRow.getCell(1).value = '识别失败或无有效数据';
+        detailSheet.mergeCells(currentRow, 1, currentRow, 4);
+        noDataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+        currentRow++;
+      }
+
+      // 5. 留一个空行给下一张图片
+      currentRow++;
+    });
 
     // 使用中国时间生成文件名：report_日期_中国时间
     // 这里获取东八区时间，格式为 YYYY-MM-DD_HH-mm-ss
