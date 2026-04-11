@@ -146,7 +146,8 @@ export class BotApp {
     
     let sentMsg: TelegramBot.Message | null = null;
     try {
-      sentMsg = await this.bot.sendMessage(chatId, `连续 ${settings.idle_timeout_seconds} 秒未检测到新截图，共收到 ${total} 张，自动开始识别…`);
+      await this.bot.sendMessage(chatId, `连续 ${settings.idle_timeout_seconds} 秒未检测到新截图，共收到 ${total} 张，自动开始识别…`);
+      sentMsg = await this.bot.sendMessage(chatId, `正在准备处理...`);
     } catch (e) {
       logger.error('Failed to send start processing message', e);
     }
