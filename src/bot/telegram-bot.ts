@@ -90,16 +90,7 @@ export class BotApp {
       if (!chatId || !messageId) return;
 
       if (query.data?.startsWith('call_report_bot:')) {
-        const automationTableName = 'A45/69T';
-        const parts = query.data.split(':');
-        const filename = parts[parts.length - 1];
-        const tableName = parts.length >= 3 ? parts[1] : undefined;
-        if (tableName && tableName !== automationTableName) {
-          await this.bot.sendMessage(chatId, '该表暂不支持机器人自动做日报，请选择“自己做”。');
-          await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
-          await this.bot.answerCallbackQuery(query.id);
-          return;
-        }
+        const filename = query.data.split(':')[1];
         const excelPath = path.join(__dirname, '../../temp', filename);
         
         const settings = getSettings();
@@ -335,34 +326,20 @@ export class BotApp {
       const excelPath = await this.excelGen.generateExcel(tasks);
       const filename = path.basename(excelPath);
 
-      const automationTableName = 'A45/69T';
-      const channelNames = tasks
-        .flatMap(t => t.result || [])
-        .map(r => (r.渠道名 || r.名称 || '').trim())
-        .filter(Boolean);
-      const prefixCounts = new Map<string, number>();
-      for (const name of channelNames) {
-        const prefix = name.split('-')[0]?.trim();
-        if (!prefix) continue;
-        prefixCounts.set(prefix, (prefixCounts.get(prefix) || 0) + 1);
-      }
-      const majorityPrefix = Array.from(prefixCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
-      const allowRobot = majorityPrefix === automationTableName;
       const caption =
         `是否呼唤日报机器人自动做日报？\n` +
-        `PS:《${automationTableName}》这张表，可以选择“机器做”或“自己做”\n` +
+        `PS:《A45/69T》这张表，可以选择“机器做”或“自己做”\n` +
         `如果不属于这张表，只能选择“自己做”`;
-      const inlineKeyboard = allowRobot
-        ? [[
-            { text: '机器做', callback_data: `call_report_bot:${automationTableName}:${filename}` },
-            { text: '自己做', callback_data: 'do_it_manually' }
-          ]]
-        : [[{ text: '自己做', callback_data: 'do_it_manually' }]];
       
       await this.bot.sendDocument(chatId, excelPath, {
         caption,
         reply_markup: {
-          inline_keyboard: inlineKeyboard
+          inline_keyboard: [
+            [
+              { text: '机器做', callback_data: `call_report_bot:${filename}` },
+              { text: '自己做', callback_data: 'do_it_manually' }
+            ]
+          ]
         }
       });
       
