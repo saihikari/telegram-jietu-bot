@@ -14,10 +14,11 @@ export class ExcelGenerator {
     // Sheet 1: Summary Data
     const summarySheet = workbook.addWorksheet('汇总数据');
     summarySheet.columns = [
-      { header: '名称', key: 'name', width: 20 },
-      { header: '总消耗', key: 'cost', width: 15 },
+      { header: '日报sheet', key: 'sheetName', width: 20 },
+      { header: '渠道名', key: 'channelName', width: 30 },
+      { header: '总消耗/U', key: 'cost', width: 15 },
       { header: '总展示', key: 'impressions', width: 15 },
-      { header: '总点击', key: 'clicks', width: 15 }
+      { header: '总点击量', key: 'clicks', width: 15 }
     ];
 
     // 美化汇总表表头，居中显示
@@ -31,7 +32,8 @@ export class ExcelGenerator {
     summaryHeader.alignment = { vertical: 'middle', horizontal: 'center' };
 
     // 设置列数字格式及居中
-    summarySheet.getColumn('name').alignment = { vertical: 'middle', horizontal: 'center' };
+    summarySheet.getColumn('sheetName').alignment = { vertical: 'middle', horizontal: 'center' };
+    summarySheet.getColumn('channelName').alignment = { vertical: 'middle', horizontal: 'center' };
     summarySheet.getColumn('cost').numFmt = '#,##0.00';
     summarySheet.getColumn('cost').alignment = { vertical: 'middle', horizontal: 'center' };
     summarySheet.getColumn('impressions').numFmt = '#,##0';
@@ -39,27 +41,41 @@ export class ExcelGenerator {
     summarySheet.getColumn('clicks').numFmt = '#,##0';
     summarySheet.getColumn('clicks').alignment = { vertical: 'middle', horizontal: 'center' };
 
-    const summaryMap: { [key: string]: AdData } = {};
+    interface SummaryData {
+      日报sheet: string;
+      渠道名: string;
+      '消耗/U': number;
+      展示: number;
+      点击量: number;
+    }
+
+    const summaryMap: { [key: string]: SummaryData } = {};
     tasks.forEach(task => {
       if (task.result) {
         task.result.forEach(item => {
-          if (!summaryMap[item.名称]) {
-            summaryMap[item.名称] = { 名称: item.名称, 消耗: 0, 展示: 0, 点击: 0 };
+          const channelName = item.渠道名 || item.名称 || '未知渠道';
+          // 日报sheet规则：去掉后面的”-APP"或者“-APK”或者”-app"或者“-apk”及其后面的所有字符串
+          const sheetName = channelName.replace(/-?(APP|APK|app|apk).*$/i, '');
+          const key = `${sheetName}_${channelName}`;
+
+          if (!summaryMap[key]) {
+            summaryMap[key] = { 日报sheet: sheetName, 渠道名: channelName, '消耗/U': 0, 展示: 0, 点击量: 0 };
           }
-          summaryMap[item.名称].消耗 += Number(item.消耗) || 0;
-          summaryMap[item.名称].展示 += Number(item.展示) || 0;
-          summaryMap[item.名称].点击 += Number(item.点击) || 0;
+          summaryMap[key]['消耗/U'] += Number(item['消耗/U'] || item.消耗) || 0;
+          summaryMap[key].展示 += Number(item.展示) || 0;
+          summaryMap[key].点击量 += Number(item.点击量 || item.点击) || 0;
         });
       }
     });
 
-    const summaryList = Object.values(summaryMap).sort((a, b) => a.名称.localeCompare(b.名称));
+    const summaryList = Object.values(summaryMap).sort((a, b) => a.日报sheet.localeCompare(b.日报sheet) || a.渠道名.localeCompare(b.渠道名));
     summaryList.forEach(item => {
       summarySheet.addRow({
-        name: item.名称,
-        cost: item.消耗.toFixed(2),
+        sheetName: item.日报sheet,
+        channelName: item.渠道名,
+        cost: item['消耗/U'].toFixed(2),
         impressions: item.展示,
-        clicks: item.点击
+        clicks: item.点击量
       });
     });
 
@@ -132,7 +148,7 @@ export class ExcelGenerator {
 
       // 3. 打印识别结果表头
       const headerRow = detailSheet.getRow(currentRow);
-      headerRow.values = ['名称', '消耗', '展示', '点击'];
+      headerRow.values = ['渠道名', '消耗/U', '展示', '点击量'];
       headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
       for (let i = 1; i <= 4; i++) {
@@ -147,19 +163,24 @@ export class ExcelGenerator {
       // 4. 打印识别结果数据
       if (task.result && task.result.length > 0) {
         task.result.forEach(r => {
+          const ch = r.渠道名 || r.名称 || '';
+          const cost = r['消耗/U'] || r.消耗 || 0;
+          const imp = r.展示 || 0;
+          const clk = r.点击量 || r.点击 || 0;
+
           const dataRow = detailSheet.getRow(currentRow);
-          dataRow.getCell(1).value = r.名称;
+          dataRow.getCell(1).value = ch;
           dataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
           
-          dataRow.getCell(2).value = Number(r.消耗) || 0;
+          dataRow.getCell(2).value = Number(cost) || 0;
           dataRow.getCell(2).numFmt = '#,##0.00';
           dataRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
           
-          dataRow.getCell(3).value = Number(r.展示) || 0;
+          dataRow.getCell(3).value = Number(imp) || 0;
           dataRow.getCell(3).numFmt = '#,##0';
           dataRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
           
-          dataRow.getCell(4).value = Number(r.点击) || 0;
+          dataRow.getCell(4).value = Number(clk) || 0;
           dataRow.getCell(4).numFmt = '#,##0';
           dataRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
           

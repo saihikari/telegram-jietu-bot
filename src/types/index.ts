@@ -31,8 +31,13 @@ export interface ImageTask {
 }
 
 export interface AdData {
-  名称: string;
-  消耗: number;
-  展示: number;
-  点击: number;
+  渠道名?: string;
+  '消耗/U'?: number;
+  展示?: number;
+  点击量?: number;
+  
+  // Backward compatibility for older records
+  名称?: string;
+  消耗?: number;
+  点击?: number;
 }
