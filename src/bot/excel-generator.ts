@@ -5,7 +5,7 @@ import { AdData, ImageTask } from '../types';
 import logger from '../utils/logger';
 
 // 引入 image-size 来读取图片原始尺寸
-const sizeOf = require('image-size');
+const { imageSize } = require('image-size');
 
 export class ExcelGenerator {
   public async generateExcel(tasks: ImageTask[]): Promise<string> {
@@ -86,7 +86,7 @@ export class ExcelGenerator {
 
       if (task.localPath && fs.existsSync(task.localPath)) {
         try {
-          const dimensions = sizeOf(task.localPath);
+          const dimensions = imageSize(task.localPath);
           if (dimensions.width && dimensions.height) {
             // 10列的宽度约为 840 像素
             const maxWidthPx = 840;
@@ -100,8 +100,8 @@ export class ExcelGenerator {
               finalHeightPx = finalHeightPx * ratio;
             }
 
-            imgWidth = finalWidthPx;
-            imgHeight = finalHeightPx;
+            imgWidth = Math.round(finalWidthPx);
+            imgHeight = Math.round(finalHeightPx);
           }
 
           const imageId = workbook.addImage({
@@ -112,8 +112,7 @@ export class ExcelGenerator {
           // 插入图片
           detailSheet.addImage(imageId, {
             tl: { col: 0, row: currentRow - 1 }, // 放置在A列，当前行
-            ext: { width: imgWidth, height: imgHeight },
-            editAs: 'oneCell'
+            ext: { width: imgWidth, height: imgHeight }
           });
 
           // 计算图片跨过的行数。默认行高约为 15 磅（20 像素）。
