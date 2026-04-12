@@ -198,8 +198,20 @@ export class BotApp {
     } else if (text.startsWith('/help')) {
       const port = process.env.WEB_PORT || 8070;
       const host = process.env.HOST || 'http://www.runtoads.top';
-      const url = `${host}:${port}/admin/guide`;
-      this.bot.sendMessage(chatId, `发送包含表格的广告截图到群里，我会自动识别并汇总。\n管理界面与帮助：${url}`);
+      const adminUrl = `${host}:${port}/admin/`;
+      const helpText = `*机器人帮助文档*
+- 功能简介：自动解析广告数据截图并生成Excel汇总，支持一键投递给日报机器人。
+- 指令列表：
+  /id - 获取当前群Chat ID
+  /test - 测试内部群连通性
+  /help - 查看帮助和FAQ
+  /status - 获取状态页URL
+  /clear - 清空等待处理的图片队列
+- 常见问题：
+  1. 若数字识别不准，请尽量在发送图片时选择“作为文件发送(File)”以保持原图清晰度。
+  2. 若机器人未回复，请检查管理后台的API Key是否配置正确或欠费。
+- 综合管理后台：\`${adminUrl}\``;
+      this.bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
     } else if (text.startsWith('/status')) {
       const port = process.env.WEB_PORT || 8070;
       const host = process.env.HOST || 'http://www.runtoads.top';
