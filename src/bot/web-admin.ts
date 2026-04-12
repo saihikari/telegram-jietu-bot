@@ -6,6 +6,10 @@ import logger from '../utils/logger';
 
 export const adminRouter = express.Router();
 
+adminRouter.get('/', (req, res) => {
+  res.redirect('/admin/status');
+});
+
 const username = process.env.ADMIN_USERNAME;
 const password = process.env.ADMIN_PASSWORD;
 
