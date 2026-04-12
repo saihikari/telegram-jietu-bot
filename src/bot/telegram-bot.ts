@@ -70,6 +70,11 @@ export class BotApp {
 
       if (msg.photo && msg.photo.length > 0) {
         this.handlePhoto(msg);
+      } else if (msg.document) {
+        const mime = msg.document.mime_type || '';
+        if (mime.startsWith('image/')) {
+          this.handleDocumentImage(msg);
+        }
       } else if (msg.text) {
         this.handleCommand(msg);
       }
@@ -143,6 +148,23 @@ export class BotApp {
       this.queues.set(chatId, queue);
     }
     return this.queues.get(chatId)!;
+  }
+
+  private async handleDocumentImage(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const document = msg.document!;
+    
+    const task: ImageTask = {
+      message_id: msg.message_id,
+      file_id: document.file_id,
+      chat_id: chatId,
+      timestamp: msg.date,
+      caption: msg.caption || '',
+      status: 'pending'
+    };
+
+    const queue = this.getQueue(chatId);
+    queue.addTask(task);
   }
 
   private async handlePhoto(msg: TelegramBot.Message) {
