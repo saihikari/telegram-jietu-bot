@@ -104,9 +104,18 @@ export class BotApp {
         if (webhookUrl) {
           try {
             const nodeFetch = require('node-fetch');
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            const basicAuth =
+              process.env.REPORT_BOT_WEBHOOK_BASIC_AUTH ||
+              (process.env.REPORT_BOT_WEBHOOK_USERNAME && process.env.REPORT_BOT_WEBHOOK_PASSWORD
+                ? `${process.env.REPORT_BOT_WEBHOOK_USERNAME}:${process.env.REPORT_BOT_WEBHOOK_PASSWORD}`
+                : '');
+            if (basicAuth) {
+              headers['Authorization'] = `Basic ${Buffer.from(basicAuth).toString('base64')}`;
+            }
             const res = await nodeFetch(webhookUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({
                 event: 'new_excel_report',
                 chatId: chatId,
@@ -123,7 +132,11 @@ export class BotApp {
             await this.bot.sendMessage(chatId, '✅ 已经成功通过内网将 Excel 数据投递给日报机器人！请稍候它会在群里给您回复。', { parse_mode: 'Markdown' });
           } catch (e: any) {
             logger.error(`Failed to call report bot webhook: ${e.message}`);
-            await this.bot.sendMessage(chatId, `❌ 投递给日报机器人失败：${e.message}\n可能是对方接口未开启、或存在鉴权拦截。`, { parse_mode: 'Markdown' });
+            const extra =
+              String(e?.message || '').includes('HTTP 401')
+                ? '\n对方接口需要 BasicAuth：请在截图机器人服务里配置 REPORT_BOT_WEBHOOK_BASIC_AUTH=用户名:密码（或配置 REPORT_BOT_WEBHOOK_USERNAME/REPORT_BOT_WEBHOOK_PASSWORD），然后重启截图机器人。'
+                : '';
+            await this.bot.sendMessage(chatId, `❌ 投递给日报机器人失败：${e.message}\n可能是对方接口未开启、或存在鉴权拦截。${extra}`, { parse_mode: 'Markdown' });
           }
         } else {
           await this.bot.sendMessage(chatId, '⚠️ 日报机器人的互通接口尚未配置，请在后台或环境变量中设置 `REPORT_BOT_WEBHOOK_URL`。', { parse_mode: 'Markdown' });
