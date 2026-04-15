@@ -21,6 +21,7 @@ export class BotApp {
   private allowedChatIds: number[];
   private unauthorizedCache: Map<number, number> = new Map();
   private queueMessages: Map<number, number> = new Map();
+  private queueMessageLastUpdate: Map<number, number> = new Map();
   private reportBatches: Map<string, { chatId: number; tasks: ImageTask[]; rowMap: Map<number, { taskIdx: number; itemIdx: number }>; rows: any[]; createdAt: number }> = new Map();
   private aiFixSessions: Map<string, { filename: string; chatId: number; userId: number; promptMessageId: number; createdAt: number }> = new Map();
 
@@ -119,6 +120,16 @@ export class BotApp {
       if (query.data?.startsWith('call_report_bot:')) {
         const filename = query.data.split(':')[1];
         const excelPath = path.join(__dirname, '../../temp', filename);
+
+        try {
+          await this.bot.answerCallbackQuery(query.id, { text: '⏳ 已开始自动录入，请稍候…' } as any);
+        } catch (e) {}
+
+        try {
+          await this.bot.editMessageReplyMarkup({
+            inline_keyboard: [[{ text: '⏳ 自动录入中…', callback_data: 'noop' }]]
+          }, { chat_id: chatId, message_id: messageId });
+        } catch (e) {}
         
         const settings = getSettings();
         const webhookUrl = process.env.REPORT_BOT_WEBHOOK_URL || settings.integration?.reportBotWebhookUrl;
@@ -151,31 +162,36 @@ export class BotApp {
               throw new Error(`HTTP ${res.status} ${res.statusText}`);
             }
             
-            await this.bot.sendMessage(chatId, '✅ 已经成功通过内网将 Excel 数据投递给日报机器人！请稍候它会在群里给您回复。', { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, '✅ 已发起自动录入，请稍候日报机器人处理并在群里回复。', { parse_mode: 'Markdown' });
           } catch (e: any) {
             logger.error(`Failed to call report bot webhook: ${e.message}`);
             const extra =
               String(e?.message || '').includes('HTTP 401')
                 ? '\n对方接口需要 BasicAuth：请在截图机器人服务里配置 REPORT_BOT_WEBHOOK_BASIC_AUTH=用户名:密码（或配置 REPORT_BOT_WEBHOOK_USERNAME/REPORT_BOT_WEBHOOK_PASSWORD），然后重启截图机器人。'
                 : '';
-            await this.bot.sendMessage(chatId, `❌ 投递给日报机器人失败：${e.message}\n可能是对方接口未开启、或存在鉴权拦截。${extra}`, { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, `❌ 自动录入失败：${e.message}\n可能是对方接口未开启、或存在鉴权拦截。${extra}`, { parse_mode: 'Markdown' });
           }
         } else {
           await this.bot.sendMessage(chatId, '⚠️ 日报机器人的互通接口尚未配置，请在后台或环境变量中设置 `REPORT_BOT_WEBHOOK_URL`。', { parse_mode: 'Markdown' });
         }
-
-        // Remove the inline keyboard after selection
-        await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
-        await this.bot.answerCallbackQuery(query.id);
       } else if (query.data?.startsWith('ai_fix:')) {
         const filename = query.data.split(':')[1];
         await this.startAiFix(chatId, userId, filename, messageId);
-        await this.bot.answerCallbackQuery(query.id);
+        await this.bot.answerCallbackQuery(query.id, { text: '✍️ 请按提示描述需要修改的内容' } as any);
       } else if (query.data === 'do_it_manually') {
-        await this.bot.sendMessage(chatId, '👌 好的，流程结束，辛苦啦！');
-        // Remove the inline keyboard after selection
-        await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
-        await this.bot.answerCallbackQuery(query.id);
+        try {
+          await this.bot.answerCallbackQuery(query.id, { text: '✅ 已选择人工录入' } as any);
+        } catch (e) {}
+        try {
+          await this.bot.editMessageReplyMarkup({
+            inline_keyboard: [[{ text: '✅ 已选择人工录入', callback_data: 'noop' }]]
+          }, { chat_id: chatId, message_id: messageId });
+        } catch (e) {}
+        await this.bot.sendMessage(chatId, '👌 已选择人工录入，本次流程结束。');
+      } else if (query.data === 'noop') {
+        try {
+          await this.bot.answerCallbackQuery(query.id, { text: '处理中…' } as any);
+        } catch (e) {}
       }
     });
   }
@@ -231,11 +247,15 @@ export class BotApp {
   }
 
   private async updateQueueMessage(chatId: number, queue: ImageQueue) {
-    const settings = getSettings();
     const len = queue.getQueue().length;
     if (len === 0) return;
     
-    const text = `📥 已暂存 ${len} 张截图，${settings.idle_timeout_seconds}秒后开始合并识别... (发送更多截图可刷新倒计时)`;
+    const now = Date.now();
+    const last = this.queueMessageLastUpdate.get(chatId) || 0;
+    if (now - last < 1200) return;
+    this.queueMessageLastUpdate.set(chatId, now);
+
+    const text = `📥 已暂存 ${len} 张截图，稍后将自动合并识别（继续发送会自动合并）`;
     
     try {
       if (len === 1) {
@@ -244,7 +264,6 @@ export class BotApp {
       } else {
         const msgId = this.queueMessages.get(chatId);
         if (msgId) {
-          // Use node-fetch to bypass edit timeouts
           const nodeFetch = require('node-fetch');
           await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
             method: 'POST',
@@ -404,16 +423,16 @@ export class BotApp {
       const caption =
         `✅ 已根据你的描述修正并生成新的 Excel。\n` +
         `是否呼唤日报机器人自动做日报？\n` +
-        `PS:《A45/69T》这张表，可以选择“机器做”或“自己做”\n` +
-        `如果不属于这张表，只能选择“自己做”`;
+        `PS:《A45/69T》这张表，可以选择“自动录入”或“人工录入”\n` +
+        `如果不属于这张表，只能选择“人工录入”`;
 
       await this.bot.sendDocument(chatId, excelPath, {
         caption,
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '机器做', callback_data: `call_report_bot:${newFilename}` },
-              { text: '自己做', callback_data: 'do_it_manually' }
+              { text: '自动录入', callback_data: `call_report_bot:${newFilename}` },
+              { text: '人工录入', callback_data: 'do_it_manually' }
             ],
             [
               { text: '🗣 告诉AI哪里错了', callback_data: `ai_fix:${newFilename}` }
@@ -463,11 +482,10 @@ export class BotApp {
     botStats.isProcessing = true;
     botStats.queueLength -= tasks.length;
     const total = tasks.length;
-    const settings = getSettings();
     
     let sentMsg: TelegramBot.Message | null = null;
     try {
-      await this.bot.sendMessage(chatId, `连续 ${settings.idle_timeout_seconds} 秒未检测到新截图，共收到 ${total} 张，自动开始识别…`);
+      await this.bot.sendMessage(chatId, `共收到 ${total} 张截图，开始合并识别…`);
       sentMsg = await this.bot.sendMessage(chatId, `正在准备处理...`);
     } catch (e) {
       logger.error('Failed to send start processing message', e);
@@ -614,16 +632,16 @@ export class BotApp {
 
       const caption =
         `是否呼唤日报机器人自动做日报？\n` +
-        `PS:《A45/69T》这张表，可以选择“机器做”或“自己做”\n` +
-        `如果不属于这张表，只能选择“自己做”`;
+        `PS:《A45/69T》这张表，可以选择“自动录入”或“人工录入”\n` +
+        `如果不属于这张表，只能选择“人工录入”`;
       
       await this.bot.sendDocument(chatId, excelPath, {
         caption,
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '机器做', callback_data: `call_report_bot:${filename}` },
-              { text: '自己做', callback_data: 'do_it_manually' }
+              { text: '自动录入', callback_data: `call_report_bot:${filename}` },
+              { text: '人工录入', callback_data: 'do_it_manually' }
             ],
             [
               { text: '🗣 告诉AI哪里错了', callback_data: `ai_fix:${filename}` }
