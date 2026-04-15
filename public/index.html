@@ -379,52 +379,46 @@
       );
     };
 
-    const ConfigPage = ({ showToast }) => {
-      const [configTarget, setConfigTarget] = useState('screenshot');
+    const ScreenshotPage = ({ showToast }) => {
       const resetPrompt = async () => {
         const res = await fetchJson('/api/default-prompt');
         if (!res?.prompt) { showToast('获取默认提示词失败', 'error'); return; }
-        showToast('已获取默认提示词，请粘贴到截图配置的 llm.systemPrompt 后保存', 'info');
-        try { await navigator.clipboard.writeText(res.prompt); showToast('默认提示词已复制到剪贴板', 'success'); } catch (e) {}
+        showToast('默认提示词已复制到剪贴板', 'success');
+        try { await navigator.clipboard.writeText(res.prompt); } catch (e) {}
       };
 
       return (
         <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
           <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 md:space-y-6">
             <div className="mb-1 md:mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
-              <Icon name="layout-dashboard" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
-              <h1 className="text-xl md:text-3xl font-bold text-tg-text">配置</h1>
+              <Icon name="image" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
+              <h1 className="text-xl md:text-3xl font-bold text-tg-text">截图</h1>
             </div>
-            <div className="bg-tg-bg rounded-2xl card-shadow p-2 flex gap-2">
-              <button
-                onClick={() => setConfigTarget('screenshot')}
-                className={`flex-1 px-4 py-2 rounded-2xl text-sm font-semibold transition-all ${configTarget === 'screenshot' ? 'bg-[rgb(var(--primary))] text-white' : 'bg-tg-secondary_bg text-tg-text hover:opacity-80'}`}
-              >
-                截图
-              </button>
-              <button
-                onClick={() => setConfigTarget('report')}
-                className={`flex-1 px-4 py-2 rounded-2xl text-sm font-semibold transition-all ${configTarget === 'report' ? 'bg-[rgb(var(--primary))] text-white' : 'bg-tg-secondary_bg text-tg-text hover:opacity-80'}`}
-              >
-                日报
-              </button>
-            </div>
+            <ConfigPanel
+              title="截图机器人配置"
+              target="screenshot"
+              showToast={showToast}
+              extraButtons={
+                <button onClick={resetPrompt} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow flex items-center gap-1">
+                  <Icon name="sparkles" size={14} />
+                  默认Prompt
+                </button>
+              }
+            />
+          </div>
+        </div>
+      );
+    };
 
-            {configTarget === 'screenshot' ? (
-              <ConfigPanel
-                title="截图机器人配置"
-                target="screenshot"
-                showToast={showToast}
-                extraButtons={
-                  <button onClick={resetPrompt} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow flex items-center gap-1">
-                    <Icon name="sparkles" size={14} />
-                    默认Prompt
-                  </button>
-                }
-              />
-            ) : (
-              <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
-            )}
+    const ReportPage = ({ showToast }) => {
+      return (
+        <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
+          <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 md:space-y-6">
+            <div className="mb-1 md:mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
+              <Icon name="file-spreadsheet" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
+              <h1 className="text-xl md:text-3xl font-bold text-tg-text">日报</h1>
+            </div>
+            <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
           </div>
         </div>
       );
@@ -433,14 +427,16 @@
     const App = () => {
       const initialTab = (() => {
         const hash = (window.location.hash || '').replace('#', '');
-        if (hash === 'config' || hash === 'status') return hash;
+        if (hash === 'screenshot' || hash === 'report' || hash === 'status') return hash;
+        if (hash === 'config') return 'screenshot';
         return 'status';
       })();
       const [tab, setTab] = useState(initialTab);
       const { toast, show, clear } = useToast();
 
       const content = useMemo(() => {
-        if (tab === 'config') return <ConfigPage showToast={show} />;
+        if (tab === 'screenshot') return <ScreenshotPage showToast={show} />;
+        if (tab === 'report') return <ReportPage showToast={show} />;
         return <StatusPage showToast={show} />;
       }, [tab]);
 
@@ -460,9 +456,13 @@
         <div className="flex flex-col-reverse md:flex-row h-[100dvh] overflow-hidden bg-background w-full">
           <div className="w-full md:w-24 h-[55px] md:h-full bg-tg-bg text-tg-hint flex flex-row md:flex-col items-center justify-around md:justify-start md:py-4 shrink-0 border-t md:border-r border-tg-hint/10 z-50 overflow-x-auto pb-[env(safe-area-inset-bottom)] shadow-sm md:shadow-none">
             <div className="flex flex-row md:flex-col w-full px-2 md:space-y-3 justify-between md:justify-start h-full md:h-auto">
-              <button onClick={() => setTab('config')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'config' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
-                <Icon name="layout-dashboard" size={22} className="mb-1" />
-                <span className="text-[10px] md:text-xs font-medium">配置</span>
+              <button onClick={() => setTab('screenshot')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'screenshot' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
+                <Icon name="image" size={22} className="mb-1" />
+                <span className="text-[10px] md:text-xs font-medium">截图</span>
+              </button>
+              <button onClick={() => setTab('report')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'report' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
+                <Icon name="file-spreadsheet" size={22} className="mb-1" />
+                <span className="text-[10px] md:text-xs font-medium">日报</span>
               </button>
               <button onClick={() => setTab('status')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'status' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
                 <Icon name="activity" size={22} className="mb-1" />
