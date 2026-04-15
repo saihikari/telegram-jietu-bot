@@ -177,9 +177,36 @@
       return { toast, show, clear: () => setToast(null) };
     };
 
-    const fetchJson = async (url, options) => {
-      const res = await fetch(url, options);
+    const tg = window.Telegram?.WebApp;
+
+    const doTgLogin = async () => {
+      if (!tg?.initData) return false;
+      try {
+        const res = await fetch('/api/tg-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData })
+        });
+        const data = await res.json();
+        if (data?.success && data?.token) {
+          sessionStorage.setItem('admin_token', data.token);
+        }
+        return Boolean(data?.success);
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const fetchJson = async (url, options, retry = false) => {
+      const token = sessionStorage.getItem('admin_token');
+      const headers = { ...(options?.headers || {}) };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(url, { ...(options || {}), headers });
       if (res.status === 401) {
+        if (!retry && tg?.initData) {
+          const ok = await doTgLogin();
+          if (ok) return fetchJson(url, options, true);
+        }
         window.location.href = '/admin/login';
         return null;
       }
@@ -386,13 +413,24 @@
     );
 
     const App = () => {
-      const [tab, setTab] = useState('status');
+      const initialTab = (() => {
+        const hash = (window.location.hash || '').replace('#', '');
+        if (hash === 'config' || hash === 'status' || hash === 'guide') return hash;
+        return 'status';
+      })();
+      const [tab, setTab] = useState(initialTab);
       const { toast, show, clear } = useToast();
 
       const content = useMemo(() => {
         if (tab === 'config') return <ConfigPage showToast={show} />;
         if (tab === 'guide') return <GuidePage />;
         return <StatusPage showToast={show} />;
+      }, [tab]);
+
+      useEffect(() => {
+        try {
+          window.history.replaceState(null, '', `/admin/#${tab}`);
+        } catch (e) {}
       }, [tab]);
 
       return (

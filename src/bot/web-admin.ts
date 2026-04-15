@@ -122,6 +122,11 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
   const username = process.env.ADMIN_USERNAME;
   const password = process.env.ADMIN_PASSWORD;
   if (!username || !password) return next();
+  const authHeader = (req.headers.authorization || '').toString();
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice('Bearer '.length).trim();
+    if (verifySessionToken(token, username)) return next();
+  }
   const cookies = parseCookies(req.headers.cookie);
   if (verifySessionToken(cookies[COOKIE_NAME], username)) return next();
   const accept = req.headers.accept || '';
@@ -244,6 +249,7 @@ adminRouter.get('/login', (req, res) => {
           body: JSON.stringify({ initData: tg.initData })
         }).then(res => res.json()).then(data => {
           if (data.success) {
+            if (data.token) sessionStorage.setItem('admin_token', data.token);
             sessionStorage.setItem('tg_login_redirected', '1');
             window.location.href = '/admin/';
           } else if (data.error === 'UNAUTHORIZED_TG_USER') {
@@ -290,7 +296,7 @@ apiRouter.post('/tg-login', express.json(), (req, res) => {
   const username = process.env.ADMIN_USERNAME || 'admin';
   const token = createSessionToken(username);
   setSessionCookie(res, token);
-  return res.json({ success: true });
+  return res.json({ success: true, token });
 });
 
 apiRouter.post('/login', (req, res) => {
