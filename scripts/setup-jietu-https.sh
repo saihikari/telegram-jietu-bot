@@ -17,6 +17,10 @@ if [[ -z "${DOMAIN}" || -z "${EMAIL}" ]]; then
 fi
 
 install_pkgs() {
+  if command -v nginx >/dev/null 2>&1 && command -v certbot >/dev/null 2>&1; then
+    return
+  fi
+
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
@@ -26,13 +30,17 @@ install_pkgs() {
 
   if command -v dnf >/dev/null 2>&1; then
     dnf install -y epel-release || true
-    dnf install -y nginx certbot python3-certbot-nginx
+    dnf install -y nginx || true
+    dnf install -y nginx-core || true
+    dnf install -y certbot python3-certbot-nginx || true
     return
   fi
 
   if command -v yum >/dev/null 2>&1; then
     yum install -y epel-release || true
-    yum install -y nginx certbot python3-certbot-nginx
+    yum install -y nginx || true
+    yum install -y nginx-core || true
+    yum install -y certbot python3-certbot-nginx || true
     return
   fi
 
@@ -41,6 +49,16 @@ install_pkgs() {
 }
 
 install_pkgs
+
+if ! command -v nginx >/dev/null 2>&1; then
+  echo "nginx not found. Please install nginx first (it may be excluded by repo filtering)."
+  exit 1
+fi
+
+if ! command -v certbot >/dev/null 2>&1; then
+  echo "certbot not found. Please install certbot first."
+  exit 1
+fi
 
 systemctl enable --now nginx
 
@@ -82,4 +100,3 @@ systemctl enable --now certbot.timer || true
 
 echo "OK"
 echo "WebApp entry: https://${DOMAIN}/admin/"
-
