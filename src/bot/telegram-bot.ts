@@ -19,6 +19,8 @@ export class BotApp {
   private processor: ImageProcessor;
   private excelGen: ExcelGenerator;
   private allowedChatIds: number[];
+  private unauthorizedCache: Map<number, number> = new Map();
+  private queueMessages: Map<number, number> = new Map();
 
   constructor() {
     const token = process.env.BOT_TOKEN;
@@ -64,6 +66,13 @@ export class BotApp {
       if (!this.allowedChatIds.includes(chatId)) {
         if (msg.text === '/id') {
           this.bot.sendMessage(chatId, `Chat ID: \`${chatId}\``, { parse_mode: 'Markdown' });
+        } else {
+          const now = Date.now();
+          const lastTime = this.unauthorizedCache.get(chatId) || 0;
+          if (now - lastTime > 10 * 60 * 1000) { // 10 minutes cooldown
+            this.bot.sendMessage(chatId, `🔒 抱歉，您暂无处理权限。\n您的 Chat ID 是 \`${chatId}\`，请将此 ID 发送给管理员申请开通。`, { parse_mode: 'Markdown' });
+            this.unauthorizedCache.set(chatId, now);
+          }
         }
         return;
       }
@@ -178,6 +187,9 @@ export class BotApp {
 
     const queue = this.getQueue(chatId);
     queue.addTask(task);
+    
+    botStats.queueLength++;
+    await this.updateQueueMessage(chatId, queue);
   }
 
   private async handlePhoto(msg: TelegramBot.Message) {
@@ -198,6 +210,40 @@ export class BotApp {
     queue.addTask(task);
     
     botStats.queueLength++;
+    await this.updateQueueMessage(chatId, queue);
+  }
+
+  private async updateQueueMessage(chatId: number, queue: ImageQueue) {
+    const settings = getSettings();
+    const len = queue.getQueue().length;
+    if (len === 0) return;
+    
+    const text = `📥 已暂存 ${len} 张截图，${settings.idle_timeout_seconds}秒后开始合并识别... (发送更多截图可刷新倒计时)`;
+    
+    try {
+      if (len === 1) {
+        const msg = await this.bot.sendMessage(chatId, text);
+        this.queueMessages.set(chatId, msg.message_id);
+      } else {
+        const msgId = this.queueMessages.get(chatId);
+        if (msgId) {
+          // Use node-fetch to bypass edit timeouts
+          const nodeFetch = require('node-fetch');
+          await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              message_id: msgId,
+              text: text
+            }),
+            agent: new (require('https').Agent)({ family: 4 })
+          });
+        }
+      }
+    } catch (e) {
+      logger.error('Failed to update queue message:', e);
+    }
   }
 
   private async handleCommand(msg: TelegramBot.Message) {
@@ -234,6 +280,36 @@ export class BotApp {
       botStats.queueLength -= queue.getQueue().length;
       queue.clearQueue();
       this.bot.sendMessage(chatId, '已清空等待队列');
+    } else if (text.startsWith('/auth ')) {
+      if (chatId !== this.allowedChatIds[0]) return this.bot.sendMessage(chatId, '⛔ 只有超级管理员（配置的第一个ID）可以使用此命令。');
+      const newId = parseInt(text.split(' ')[1]);
+      if (!newId || isNaN(newId)) return this.bot.sendMessage(chatId, '格式错误，请使用: /auth 123456789');
+      
+      if (!this.allowedChatIds.includes(newId)) {
+        this.allowedChatIds.push(newId);
+        // Append to .env file
+        const envPath = path.join(__dirname, '../../.env');
+        if (fs.existsSync(envPath)) {
+          let envContent = fs.readFileSync(envPath, 'utf8');
+          if (envContent.includes('MONITOR_CHAT_IDS=')) {
+            envContent = envContent.replace(/(MONITOR_CHAT_IDS=.*)/, `$1,${newId}`);
+          } else {
+            envContent += `\nMONITOR_CHAT_IDS=${this.allowedChatIds.join(',')}`;
+          }
+          fs.writeFileSync(envPath, envContent);
+        }
+        this.bot.sendMessage(chatId, `✅ 成功授权 ID: ${newId}，已写入配置。`);
+      } else {
+        this.bot.sendMessage(chatId, `⚠️ ID: ${newId} 已经在白名单中`);
+      }
+    } else if (text.startsWith('/model ')) {
+      if (chatId !== this.allowedChatIds[0]) return this.bot.sendMessage(chatId, '⛔ 只有超级管理员可以使用此命令。');
+      const newModel = text.split(' ')[1];
+      if (!newModel) return this.bot.sendMessage(chatId, '格式错误，请使用: /model gpt-4o');
+      const settings = getSettings();
+      settings.llm.model = newModel;
+      saveSettings(settings);
+      this.bot.sendMessage(chatId, `✅ 主力模型已一键切换为: ${newModel}`);
     }
   }
 
@@ -354,6 +430,19 @@ export class BotApp {
     }
 
     if (sentMsg) {
+      // Build summary text
+      let summaryText = `📊 **识别完成！(共 ${total} 张图)**\n`;
+      tasks.forEach((t, idx) => {
+        if (t.result && t.result.length > 0) {
+          t.result.forEach(r => {
+            summaryText += `- \`${r['渠道名'] || '未知'}\` | 消耗: ${r['消耗/U'] || 0} | 展示: ${r['展示'] || 0} | 点击: ${r['点击量'] || 0}\n`;
+          });
+        } else {
+          summaryText += `- 第 ${idx + 1} 张图未识别到有效数据\n`;
+        }
+      });
+      summaryText += `\n👇 *确认无误请点击下方投递按钮，若有误可重新发送*`;
+
       try {
         const nodeFetch = require('node-fetch');
         await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
@@ -362,11 +451,15 @@ export class BotApp {
           body: JSON.stringify({
             chat_id: chatId,
             message_id: sentMsg.message_id,
-            text: `✅ 全部识别完毕！成功 ${successCount} 张 / 失败 ${failCount} 张，正在生成汇总表格…`
+            text: summaryText,
+            parse_mode: 'Markdown'
           }),
           agent: new (require('https').Agent)({ family: 4 })
         });
       } catch (e) {}
+      
+      // Clear queue message tracking for this chat
+      this.queueMessages.delete(chatId);
     }
 
     try {
