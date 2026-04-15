@@ -138,4 +138,67 @@ export class ImageProcessor {
       throw error;
     }
   }
+
+  public async reviseRows(rows: any[], instruction: string): Promise<any[]> {
+    const settings = getSettings();
+    const safeBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl).replace(/\/$/, '');
+    logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${settings.llm.model} for revision`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    try {
+      const client = new OpenAI({
+        apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
+        baseURL: safeBaseUrl,
+        fetch: customFetch as any
+      });
+
+      const systemPrompt =
+        '你是一个严格的JSON数据修正助手。你将收到一份 rows 数组（每行包含 rowId、渠道名、消耗/U、展示、点击量）以及用户的自然语言修改要求。' +
+        '请只做用户明确要求的修改：可以修改数值、修改渠道名、或删除某些行。' +
+        '你必须返回 JSON 对象：{"rows":[...]}，并且每一行必须保留 rowId。' +
+        '如果用户没有提到某行，就保持该行不变。不要输出任何解释文字。';
+
+      const response = await client.chat.completions.create({
+        model: process.env.LLM_MODEL || settings.llm.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              rows,
+              instruction
+            })
+          }
+        ],
+        max_tokens: Math.min(1200, settings.llm.maxTokens || 1000),
+        temperature: 0,
+        response_format: { type: 'json_object' }
+      }, { signal: controller.signal as any });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) throw new Error('No content returned from LLM');
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch (e) {
+        throw new Error(`Failed to parse LLM response as JSON: ${content}`);
+      }
+
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.rows)) return parsed.rows;
+        if (Array.isArray(parsed.data)) return parsed.data;
+        const keys = Object.keys(parsed);
+        for (const k of keys) {
+          if (Array.isArray(parsed[k])) return parsed[k];
+        }
+      }
+      throw new Error(`No array returned from LLM: ${content}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 }
