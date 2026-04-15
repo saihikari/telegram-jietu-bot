@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>截图/日报 综合管理后台</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@0.475.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            tg: {
+              bg: 'var(--fb-bg)',
+              secondary_bg: 'var(--fb-secondary-bg)',
+              text: 'var(--fb-text)',
+              hint: 'var(--fb-hint)',
+              link: 'var(--fb-link)',
+              button: 'var(--fb-button)',
+              button_text: 'var(--fb-button-text)',
+              secondary_button: 'var(--fb-secondary-bg)',
+              secondary_button_text: 'var(--fb-text)',
+              destructive: 'var(--fb-destructive)',
+              accent: 'var(--fb-button)',
+              section_bg: 'var(--fb-section-bg)',
+              section_header: 'var(--fb-button)'
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Roboto', 'Helvetica Neue', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --fb-bg: #ffffff;
+      --fb-secondary-bg: #f4f9f6;
+      --fb-text: #0f172a;
+      --fb-hint: #64748b;
+      --fb-link: #24a159;
+      --fb-button: #24a159;
+      --fb-button-text: #ffffff;
+      --fb-destructive: #ef4444;
+      --fb-section-bg: #ffffff;
+      --primary: 36, 161, 89;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fb-bg: #1e293b;
+        --fb-secondary-bg: #0f172a;
+        --fb-text: #f8fafc;
+        --fb-hint: #94a3b8;
+        --fb-link: #10b981;
+        --fb-button: #10b981;
+        --fb-button-text: #ffffff;
+        --fb-destructive: #f87171;
+        --fb-section-bg: #1e293b;
+        --primary: 16, 185, 129;
+      }
+    }
+
+    body {
+      background-color: var(--fb-secondary-bg);
+      color: var(--fb-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    input, textarea, select {
+      background-color: var(--fb-bg);
+      color: var(--fb-text);
+      color-scheme: light dark;
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--fb-hint);
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--fb-hint); border-radius: 3px; opacity: 0.5; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--fb-text); }
+
+    .card-shadow { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border: 1px solid rgba(128, 128, 128, 0.1); }
+    .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+  </style>
+  <script>
+    (function syncTelegramTheme() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg) return;
+      try {
+        tg.ready();
+        tg.expand();
+        const p = tg.themeParams || {};
+        const map = {
+          '--fb-bg': p.bg_color,
+          '--fb-secondary-bg': p.secondary_bg_color,
+          '--fb-text': p.text_color,
+          '--fb-hint': p.hint_color,
+          '--fb-link': p.link_color,
+          '--fb-button': p.button_color,
+          '--fb-button-text': p.button_text_color,
+          '--fb-destructive': p.destructive_text_color
+        };
+        Object.entries(map).forEach(([k, v]) => {
+          if (v) document.documentElement.style.setProperty(k, v);
+        });
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="root">
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--fb-secondary-bg);color:var(--fb-hint);font-family:-apple-system,BlinkMacSystemFont,'Roboto','Helvetica Neue',sans-serif;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:18px;height:18px;border:2px solid rgba(36,161,89,.35);border-top-color:rgba(36,161,89,1);border-radius:999px;animation:spin 1s linear infinite;"></div>
+        <div style="font-size:14px;">正在加载管理后台…</div>
+      </div>
+    </div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  <script type="text/babel" data-type="module">
+    const { useEffect, useMemo, useRef, useState } = React;
+
+    const Icon = ({ name, size = 20, className = "" }) => {
+      const containerRef = useRef(null);
+      useEffect(() => {
+        if (!containerRef.current || !window.lucide) return;
+        const i = document.createElement('i');
+        i.setAttribute('data-lucide', name);
+        if (className) i.setAttribute('class', className);
+        containerRef.current.innerHTML = '';
+        containerRef.current.appendChild(i);
+        window.lucide.createIcons({ root: containerRef.current, attrs: { width: size, height: size } });
+      }, [name, size, className]);
+      return <span ref={containerRef} className="inline-flex items-center justify-center shrink-0" style={{ width: size, height: size }}></span>;
+    };
+
+    const Toast = ({ toast, onClose }) => {
+      if (!toast) return null;
+      const color =
+        toast.type === 'success' ? 'bg-[rgba(var(--primary),0.12)] text-[rgb(var(--primary))] border-[rgba(var(--primary),0.25)]' :
+        toast.type === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/25' :
+        'bg-tg-bg text-tg-text border-tg-hint/20';
+      return (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[80] w-[92%] max-w-md">
+          <div className={`card-shadow rounded-2xl px-4 py-3 border ${color} flex items-center gap-2`}>
+            <div className="flex-1 text-sm font-medium">{toast.text}</div>
+            <button onClick={onClose} className="p-1 rounded-lg hover:opacity-80 transition-all">
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const useToast = () => {
+      const [toast, setToast] = useState(null);
+      const show = (text, type='info') => {
+        setToast({ text, type });
+        setTimeout(() => setToast(null), 2600);
+      };
+      return { toast, show, clear: () => setToast(null) };
+    };
+
+    const fetchJson = async (url, options) => {
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        window.location.href = '/admin/login';
+        return null;
+      }
+      const text = await res.text();
+      try { return JSON.parse(text); } catch { return { raw: text }; }
+    };
+
+    const StatusPage = ({ showToast }) => {
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        let mounted = true;
+        const run = async () => {
+          const json = await fetchJson('/api/status');
+          if (!mounted || !json) return;
+          setData(json);
+          setLoading(false);
+        };
+        run();
+        const timer = setInterval(run, 5000);
+        return () => { mounted = false; clearInterval(timer); };
+      }, []);
+
+      const screenshot = data?.screenshot;
+      const report = data?.report;
+      const uptime = screenshot?.startTime ? Math.floor((Date.now() - screenshot.startTime) / 1000) : null;
+
+      return (
+        <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
+          <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
+            <div className="mb-4 md:mb-8 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
+              <Icon name="activity" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
+              <h1 className="text-xl md:text-3xl font-bold text-tg-text">系统运行状态</h1>
+            </div>
+
+            {loading && !data ? (
+              <div className="flex-1 flex items-center justify-center py-16">
+                <Icon name="loader" className="animate-spin text-[rgb(var(--primary))]" size={24} />
+              </div>
+            ) : (
+              <div className="space-y-4 md:space-y-6">
+                <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="image" size={18} className="text-[rgb(var(--primary))]" />
+                    <div className="font-bold text-tg-text">截图机器人</div>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
+                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">运行时间</p>
+                      <p className="text-base md:text-2xl font-bold text-tg-text">{uptime ?? '-'} 秒</p>
+                    </div>
+                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
+                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">队列图片数</p>
+                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.queueLength ?? '-'}</p>
+                    </div>
+                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#af52de]">
+                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">是否正在识别</p>
+                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.isProcessing ? '是' : '否'}</p>
+                    </div>
+                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#ff9500]">
+                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">累计处理</p>
+                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.processedCount ?? '-'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="file-spreadsheet" size={18} className="text-[rgb(var(--primary))]" />
+                    <div className="font-bold text-tg-text">日报机器人</div>
+                  </div>
+                  <div className="text-xs md:text-sm text-tg-hint mb-2">
+                    {report?.online === false ? `未连接：${report?.error || ''}` : '已连接'}
+                  </div>
+                  <pre className="text-[10px] md:text-xs bg-tg-secondary_bg rounded-2xl card-shadow p-3 overflow-x-auto">{JSON.stringify(report, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const ConfigPanel = ({ title, target, showToast, extraButtons }) => {
+      const [loading, setLoading] = useState(true);
+      const [saving, setSaving] = useState(false);
+      const [jsonText, setJsonText] = useState('');
+
+      const load = async () => {
+        setLoading(true);
+        const data = await fetchJson(`/api/config?target=${encodeURIComponent(target)}`);
+        if (data) setJsonText(JSON.stringify(data, null, 2));
+        setLoading(false);
+      };
+
+      useEffect(() => { load(); }, []);
+
+      const save = async () => {
+        let parsed;
+        try { parsed = JSON.parse(jsonText); } catch (e) { showToast('JSON 格式不正确', 'error'); return; }
+        setSaving(true);
+        const res = await fetchJson(`/api/config?target=${encodeURIComponent(target)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsed)
+        });
+        setSaving(false);
+        if (res && res.success !== false) showToast('保存成功', 'success');
+        else showToast(res?.error ? `保存失败：${res.error}` : '保存失败', 'error');
+      };
+
+      const backup = async () => {
+        const res = await fetchJson(`/api/config/backup?target=${encodeURIComponent(target)}`, { method: 'POST' });
+        if (res && res.success !== false) showToast('备份成功', 'success');
+        else showToast(res?.error ? `备份失败：${res.error}` : '备份失败', 'error');
+      };
+
+      return (
+        <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6 flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Icon name="settings" size={18} className="text-[rgb(var(--primary))]" />
+              <div className="font-bold text-tg-text">{title}</div>
+            </div>
+            <div className="flex gap-2">
+              {extraButtons}
+              <button onClick={backup} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow">备份</button>
+              <button onClick={save} disabled={saving} className="px-3 py-2 rounded-xl bg-[rgb(var(--primary))] text-white text-xs font-semibold hover:opacity-90 transition-all card-shadow flex items-center gap-1">
+                {saving ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="save" size={14} />}
+                保存
+              </button>
+            </div>
+          </div>
+          <div className="bg-tg-secondary_bg rounded-2xl card-shadow p-2 flex-1 min-h-[260px]">
+            {loading ? (
+              <div className="h-full flex items-center justify-center">
+                <Icon name="loader" className="animate-spin text-[rgb(var(--primary))]" size={24} />
+              </div>
+            ) : (
+              <textarea
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
+                className="w-full h-full p-3 font-mono text-[10px] md:text-sm bg-[#1c1c1d] text-[rgb(var(--primary))] rounded-xl focus:outline-none resize-none border border-tg-hint/10 overflow-x-auto"
+                spellCheck="false"
+                wrap="off"
+              />
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const ConfigPage = ({ showToast }) => {
+      const resetPrompt = async () => {
+        const res = await fetchJson('/api/default-prompt');
+        if (!res?.prompt) { showToast('获取默认提示词失败', 'error'); return; }
+        showToast('已获取默认提示词，请粘贴到截图配置的 llm.systemPrompt 后保存', 'info');
+        try { await navigator.clipboard.writeText(res.prompt); showToast('默认提示词已复制到剪贴板', 'success'); } catch (e) {}
+      };
+
+      return (
+        <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
+          <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 md:space-y-6">
+            <div className="mb-1 md:mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
+              <Icon name="layout-dashboard" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
+              <h1 className="text-xl md:text-3xl font-bold text-tg-text">配置</h1>
+            </div>
+            <ConfigPanel
+              title="截图机器人配置"
+              target="screenshot"
+              showToast={showToast}
+              extraButtons={
+                <button onClick={resetPrompt} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow flex items-center gap-1">
+                  <Icon name="sparkles" size={14} />
+                  默认Prompt
+                </button>
+              }
+            />
+            <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
+          </div>
+        </div>
+      );
+    };
+
+    const GuidePage = () => (
+      <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
+        <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4">
+          <div className="mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
+            <Icon name="book-open" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
+            <h1 className="text-xl md:text-3xl font-bold text-tg-text">帮助</h1>
+          </div>
+          <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6 text-sm md:text-base text-tg-text space-y-2">
+            <div className="font-bold">截图机器人</div>
+            <div className="text-tg-hint text-sm">群里发送包含表格的广告截图或以文件发送的原图，机器人会自动合并识别并生成 Excel。</div>
+            <div className="text-tg-hint text-sm">识别后可选择“自动录入”投递给日报机器人，或“人工录入”。</div>
+          </div>
+          <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6 text-sm md:text-base text-tg-text space-y-2">
+            <div className="font-bold">一句话纠错</div>
+            <div className="text-tg-hint text-sm">在 Excel 下方点击“告诉AI哪里错了”，用尽量清晰的话描述修改内容，例如：把 VIP234 的点击量改成 4。</div>
+          </div>
+        </div>
+      </div>
+    );
+
+    const App = () => {
+      const [tab, setTab] = useState('status');
+      const { toast, show, clear } = useToast();
+
+      const content = useMemo(() => {
+        if (tab === 'config') return <ConfigPage showToast={show} />;
+        if (tab === 'guide') return <GuidePage />;
+        return <StatusPage showToast={show} />;
+      }, [tab]);
+
+      return (
+        <div className="flex flex-col-reverse md:flex-row h-[100dvh] overflow-hidden bg-background w-full">
+          <div className="w-full md:w-24 h-[55px] md:h-full bg-tg-bg text-tg-hint flex flex-row md:flex-col items-center justify-around md:justify-start md:py-4 shrink-0 border-t md:border-r border-tg-hint/10 z-50 overflow-x-auto pb-[env(safe-area-inset-bottom)] shadow-sm md:shadow-none">
+            <div className="flex flex-row md:flex-col w-full px-2 md:space-y-3 justify-between md:justify-start h-full md:h-auto">
+              <button onClick={() => setTab('config')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'config' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
+                <Icon name="layout-dashboard" size={22} className="mb-1" />
+                <span className="text-[10px] md:text-xs font-medium">配置</span>
+              </button>
+              <button onClick={() => setTab('status')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'status' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
+                <Icon name="activity" size={22} className="mb-1" />
+                <span className="text-[10px] md:text-xs font-medium">状态</span>
+              </button>
+              <button onClick={() => setTab('guide')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'guide' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
+                <Icon name="book-open" size={22} className="mb-1" />
+                <span className="text-[10px] md:text-xs font-medium">帮助</span>
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 min-h-0">{content}</div>
+          <Toast toast={toast} onClose={clear} />
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

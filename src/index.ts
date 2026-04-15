@@ -27,6 +27,8 @@ const app = express();
 const port = process.env.WEB_PORT || 8070;
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.set('trust proxy', 1);
 app.use('/admin', adminRouter);
 app.use('/api', apiRouter);
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
