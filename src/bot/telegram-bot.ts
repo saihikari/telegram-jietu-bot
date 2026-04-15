@@ -20,8 +20,6 @@ export class BotApp {
   private excelGen: ExcelGenerator;
   private allowedChatIds: number[];
   private unauthorizedCache: Map<number, number> = new Map();
-  private queueMessages: Map<number, number> = new Map();
-  private queueMessageLastUpdate: Map<number, number> = new Map();
   private reportBatches: Map<string, { chatId: number; tasks: ImageTask[]; rowMap: Map<number, { taskIdx: number; itemIdx: number }>; rows: any[]; createdAt: number }> = new Map();
   private aiFixSessions: Map<string, { filename: string; chatId: number; userId: number; promptMessageId: number; createdAt: number }> = new Map();
 
@@ -222,7 +220,6 @@ export class BotApp {
     queue.addTask(task);
     
     botStats.queueLength++;
-    await this.updateQueueMessage(chatId, queue);
   }
 
   private async handlePhoto(msg: TelegramBot.Message) {
@@ -243,43 +240,6 @@ export class BotApp {
     queue.addTask(task);
     
     botStats.queueLength++;
-    await this.updateQueueMessage(chatId, queue);
-  }
-
-  private async updateQueueMessage(chatId: number, queue: ImageQueue) {
-    const len = queue.getQueue().length;
-    if (len === 0) return;
-    
-    const now = Date.now();
-    const last = this.queueMessageLastUpdate.get(chatId) || 0;
-    if (now - last < 1200) return;
-    this.queueMessageLastUpdate.set(chatId, now);
-
-    const text = `📥 已暂存 ${len} 张截图，稍后将自动合并识别（继续发送会自动合并）`;
-    
-    try {
-      if (len === 1) {
-        const msg = await this.bot.sendMessage(chatId, text);
-        this.queueMessages.set(chatId, msg.message_id);
-      } else {
-        const msgId = this.queueMessages.get(chatId);
-        if (msgId) {
-          const nodeFetch = require('node-fetch');
-          await nodeFetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/editMessageText`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              message_id: msgId,
-              text: text
-            }),
-            agent: new (require('https').Agent)({ family: 4 })
-          });
-        }
-      }
-    } catch (e) {
-      logger.error('Failed to update queue message:', e);
-    }
   }
 
   private async handleCommand(msg: TelegramBot.Message) {
@@ -622,8 +582,6 @@ export class BotApp {
           agent: new (require('https').Agent)({ family: 4 })
         });
       } catch (e) {}
-
-      this.queueMessages.delete(chatId);
     }
 
     try {
