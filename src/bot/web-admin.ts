@@ -320,7 +320,6 @@ apiRouter.post('/logout', (req, res) => {
   res.redirect('/admin/login');
 });
 
-adminRouter.use(requireAuth);
 apiRouter.use(requireAuth);
 
 const publicPath = path.join(process.cwd(), 'public');

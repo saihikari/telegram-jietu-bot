@@ -214,6 +214,36 @@
       try { return JSON.parse(text); } catch { return { raw: text }; }
     };
 
+    const StatsSection = ({ title, icon, stats }) => {
+      const uptime = stats?.startTime ? Math.floor((Date.now() - stats.startTime) / 1000) : null;
+      return (
+        <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name={icon} size={18} className="text-[rgb(var(--primary))]" />
+            <div className="font-bold text-tg-text">{title}</div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+            <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
+              <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">运行时间</p>
+              <p className="text-base md:text-2xl font-bold text-tg-text">{uptime ?? '-' } 秒</p>
+            </div>
+            <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
+              <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">队列图片数</p>
+              <p className="text-base md:text-2xl font-bold text-tg-text">{stats?.queueLength ?? '-'}</p>
+            </div>
+            <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#af52de]">
+              <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">是否正在识别</p>
+              <p className="text-base md:text-2xl font-bold text-tg-text">{typeof stats?.isProcessing === 'boolean' ? (stats.isProcessing ? '是' : '否') : '-'}</p>
+            </div>
+            <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#ff9500]">
+              <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">累计处理</p>
+              <p className="text-base md:text-2xl font-bold text-tg-text">{stats?.processedCount ?? '-'}</p>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const StatusPage = ({ showToast }) => {
       const [data, setData] = useState(null);
       const [loading, setLoading] = useState(true);
@@ -233,7 +263,19 @@
 
       const screenshot = data?.screenshot;
       const report = data?.report;
-      const uptime = screenshot?.startTime ? Math.floor((Date.now() - screenshot.startTime) / 1000) : null;
+      const reportStats = (() => {
+        if (!report || report?.online === false) return null;
+        if (typeof report?.startTime === 'number') return report;
+        if (typeof report?.uptime_seconds === 'number') {
+          return {
+            startTime: Date.now() - report.uptime_seconds * 1000,
+            queueLength: report.queueLength,
+            isProcessing: report.isProcessing,
+            processedCount: report.processedCount
+          };
+        }
+        return report;
+      })();
 
       return (
         <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
@@ -249,41 +291,18 @@
               </div>
             ) : (
               <div className="space-y-4 md:space-y-6">
-                <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Icon name="image" size={18} className="text-[rgb(var(--primary))]" />
-                    <div className="font-bold text-tg-text">截图机器人</div>
-                  </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
-                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">运行时间</p>
-                      <p className="text-base md:text-2xl font-bold text-tg-text">{uptime ?? '-'} 秒</p>
+                <StatsSection title="截图机器人" icon="image" stats={screenshot} />
+                {report?.online === false ? (
+                  <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon name="file-spreadsheet" size={18} className="text-[rgb(var(--primary))]" />
+                      <div className="font-bold text-tg-text">日报机器人</div>
                     </div>
-                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[rgb(var(--primary))]">
-                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">队列图片数</p>
-                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.queueLength ?? '-'}</p>
-                    </div>
-                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#af52de]">
-                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">是否正在识别</p>
-                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.isProcessing ? '是' : '否'}</p>
-                    </div>
-                    <div className="bg-tg-secondary_bg p-4 rounded-2xl card-shadow border-l-4 border-[#ff9500]">
-                      <p className="text-[10px] md:text-sm font-medium text-tg-hint mb-1">累计处理</p>
-                      <p className="text-base md:text-2xl font-bold text-tg-text">{screenshot?.processedCount ?? '-'}</p>
-                    </div>
+                    <div className="text-sm text-red-500 mt-2">未连接：{report?.error || ''}</div>
                   </div>
-                </div>
-
-                <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Icon name="file-spreadsheet" size={18} className="text-[rgb(var(--primary))]" />
-                    <div className="font-bold text-tg-text">日报机器人</div>
-                  </div>
-                  <div className="text-xs md:text-sm text-tg-hint mb-2">
-                    {report?.online === false ? `未连接：${report?.error || ''}` : '已连接'}
-                  </div>
-                  <pre className="text-[10px] md:text-xs bg-tg-secondary_bg rounded-2xl card-shadow p-3 overflow-x-auto">{JSON.stringify(report, null, 2)}</pre>
-                </div>
+                ) : (
+                  <StatsSection title="日报机器人" icon="file-spreadsheet" stats={reportStats} />
+                )}
               </div>
             )}
           </div>
@@ -361,6 +380,7 @@
     };
 
     const ConfigPage = ({ showToast }) => {
+      const [configTarget, setConfigTarget] = useState('screenshot');
       const resetPrompt = async () => {
         const res = await fetchJson('/api/default-prompt');
         if (!res?.prompt) { showToast('获取默认提示词失败', 'error'); return; }
@@ -375,47 +395,45 @@
               <Icon name="layout-dashboard" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
               <h1 className="text-xl md:text-3xl font-bold text-tg-text">配置</h1>
             </div>
-            <ConfigPanel
-              title="截图机器人配置"
-              target="screenshot"
-              showToast={showToast}
-              extraButtons={
-                <button onClick={resetPrompt} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow flex items-center gap-1">
-                  <Icon name="sparkles" size={14} />
-                  默认Prompt
-                </button>
-              }
-            />
-            <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
+            <div className="bg-tg-bg rounded-2xl card-shadow p-2 flex gap-2">
+              <button
+                onClick={() => setConfigTarget('screenshot')}
+                className={`flex-1 px-4 py-2 rounded-2xl text-sm font-semibold transition-all ${configTarget === 'screenshot' ? 'bg-[rgb(var(--primary))] text-white' : 'bg-tg-secondary_bg text-tg-text hover:opacity-80'}`}
+              >
+                截图
+              </button>
+              <button
+                onClick={() => setConfigTarget('report')}
+                className={`flex-1 px-4 py-2 rounded-2xl text-sm font-semibold transition-all ${configTarget === 'report' ? 'bg-[rgb(var(--primary))] text-white' : 'bg-tg-secondary_bg text-tg-text hover:opacity-80'}`}
+              >
+                日报
+              </button>
+            </div>
+
+            {configTarget === 'screenshot' ? (
+              <ConfigPanel
+                title="截图机器人配置"
+                target="screenshot"
+                showToast={showToast}
+                extraButtons={
+                  <button onClick={resetPrompt} className="px-3 py-2 rounded-xl bg-tg-secondary_bg text-tg-text text-xs font-medium hover:opacity-80 transition-all card-shadow flex items-center gap-1">
+                    <Icon name="sparkles" size={14} />
+                    默认Prompt
+                  </button>
+                }
+              />
+            ) : (
+              <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
+            )}
           </div>
         </div>
       );
     };
 
-    const GuidePage = () => (
-      <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
-        <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4">
-          <div className="mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
-            <Icon name="book-open" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
-            <h1 className="text-xl md:text-3xl font-bold text-tg-text">帮助</h1>
-          </div>
-          <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6 text-sm md:text-base text-tg-text space-y-2">
-            <div className="font-bold">截图机器人</div>
-            <div className="text-tg-hint text-sm">群里发送包含表格的广告截图或以文件发送的原图，机器人会自动合并识别并生成 Excel。</div>
-            <div className="text-tg-hint text-sm">识别后可选择“自动录入”投递给日报机器人，或“人工录入”。</div>
-          </div>
-          <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6 text-sm md:text-base text-tg-text space-y-2">
-            <div className="font-bold">一句话纠错</div>
-            <div className="text-tg-hint text-sm">在 Excel 下方点击“告诉AI哪里错了”，用尽量清晰的话描述修改内容，例如：把 VIP234 的点击量改成 4。</div>
-          </div>
-        </div>
-      </div>
-    );
-
     const App = () => {
       const initialTab = (() => {
         const hash = (window.location.hash || '').replace('#', '');
-        if (hash === 'config' || hash === 'status' || hash === 'guide') return hash;
+        if (hash === 'config' || hash === 'status') return hash;
         return 'status';
       })();
       const [tab, setTab] = useState(initialTab);
@@ -423,9 +441,14 @@
 
       const content = useMemo(() => {
         if (tab === 'config') return <ConfigPage showToast={show} />;
-        if (tab === 'guide') return <GuidePage />;
         return <StatusPage showToast={show} />;
       }, [tab]);
+
+      useEffect(() => {
+        if (!tg?.initData) return;
+        if (sessionStorage.getItem('admin_token')) return;
+        doTgLogin();
+      }, []);
 
       useEffect(() => {
         try {
@@ -444,10 +467,6 @@
               <button onClick={() => setTab('status')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'status' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
                 <Icon name="activity" size={22} className="mb-1" />
                 <span className="text-[10px] md:text-xs font-medium">状态</span>
-              </button>
-              <button onClick={() => setTab('guide')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'guide' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
-                <Icon name="book-open" size={22} className="mb-1" />
-                <span className="text-[10px] md:text-xs font-medium">帮助</span>
               </button>
             </div>
           </div>
