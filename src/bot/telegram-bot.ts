@@ -22,6 +22,8 @@ export class BotApp {
   private unauthorizedCache: Map<number, number> = new Map();
   private reportBatches: Map<string, { chatId: number; tasks: ImageTask[]; rowMap: Map<number, { taskIdx: number; itemIdx: number }>; rows: any[]; createdAt: number }> = new Map();
   private aiFixSessions: Map<string, { filename: string; chatId: number; userId: number; promptMessageId: number; createdAt: number }> = new Map();
+  private statusMessages: Map<number, number> = new Map();
+  private queueStatusTimers: Map<number, NodeJS.Timeout> = new Map();
 
   constructor() {
     const token = process.env.BOT_TOKEN;
@@ -203,6 +205,32 @@ export class BotApp {
     return this.queues.get(chatId)!;
   }
 
+  private scheduleQueueStatusUpdate(chatId: number, count: number) {
+    if (this.queueStatusTimers.has(chatId)) {
+      clearTimeout(this.queueStatusTimers.get(chatId)!);
+    }
+    
+    this.queueStatusTimers.set(chatId, setTimeout(async () => {
+      const text = `⏳ 已收到 ${count} 张截图，等待继续发送...`;
+      const lastMsgId = this.statusMessages.get(chatId);
+      
+      if (lastMsgId) {
+        try {
+          // Instead of delete and resend which might cause rate limit if the user sends 50 images,
+          // let's just delete the old one. We wrap it in a try-catch to ignore errors.
+          await this.bot.deleteMessage(chatId, lastMsgId);
+        } catch (e) {}
+      }
+      
+      try {
+        const msg = await this.bot.sendMessage(chatId, text);
+        this.statusMessages.set(chatId, msg.message_id);
+      } catch (e) {}
+      
+      this.queueStatusTimers.delete(chatId);
+    }, 500));
+  }
+
   private async handleDocumentImage(msg: TelegramBot.Message) {
     const chatId = msg.chat.id;
     const document = msg.document!;
@@ -220,6 +248,7 @@ export class BotApp {
     queue.addTask(task);
     
     botStats.queueLength++;
+    this.scheduleQueueStatusUpdate(chatId, queue.getQueue().length);
   }
 
   private async handlePhoto(msg: TelegramBot.Message) {
@@ -240,6 +269,7 @@ export class BotApp {
     queue.addTask(task);
     
     botStats.queueLength++;
+    this.scheduleQueueStatusUpdate(chatId, queue.getQueue().length);
   }
 
   private async handleCommand(msg: TelegramBot.Message) {
@@ -275,6 +305,19 @@ export class BotApp {
       const queue = this.getQueue(chatId);
       botStats.queueLength -= queue.getQueue().length;
       queue.clearQueue();
+      
+      const lastMsgId = this.statusMessages.get(chatId);
+      if (lastMsgId) {
+        try {
+          this.bot.deleteMessage(chatId, lastMsgId);
+        } catch (e) {}
+        this.statusMessages.delete(chatId);
+      }
+      if (this.queueStatusTimers.has(chatId)) {
+        clearTimeout(this.queueStatusTimers.get(chatId)!);
+        this.queueStatusTimers.delete(chatId);
+      }
+      
       this.bot.sendMessage(chatId, '已清空等待队列');
     } else if (text.startsWith('/auth ')) {
       if (chatId !== this.allowedChatIds[0]) return this.bot.sendMessage(chatId, '⛔ 只有超级管理员（配置的第一个ID）可以使用此命令。');
@@ -443,10 +486,24 @@ export class BotApp {
     botStats.queueLength -= tasks.length;
     const total = tasks.length;
     
+    if (this.queueStatusTimers.has(chatId)) {
+      clearTimeout(this.queueStatusTimers.get(chatId)!);
+      this.queueStatusTimers.delete(chatId);
+    }
+
+    let sentMsgId = this.statusMessages.get(chatId);
     let sentMsg: TelegramBot.Message | null = null;
+    
+    if (sentMsgId) {
+      try {
+        await this.bot.deleteMessage(chatId, sentMsgId);
+      } catch (e) {}
+    }
+    
     try {
-      await this.bot.sendMessage(chatId, `共收到 ${total} 张截图，开始合并识别…`);
-      sentMsg = await this.bot.sendMessage(chatId, `正在准备处理...`);
+      sentMsg = await this.bot.sendMessage(chatId, `⏳ 正在提取数据 (0/${total})...`);
+      this.statusMessages.set(chatId, sentMsg.message_id);
+      sentMsgId = sentMsg.message_id;
     } catch (e) {
       logger.error('Failed to send start processing message', e);
     }
@@ -459,7 +516,7 @@ export class BotApp {
       task.status = 'processing';
       
       // Update progress message
-      if (sentMsg) {
+      if (sentMsgId) {
         try {
           // Use node-fetch to completely bypass undici ETIMEDOUT bugs when editing messages
           const nodeFetch = require('node-fetch');
@@ -468,8 +525,8 @@ export class BotApp {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              message_id: sentMsg.message_id,
-              text: `正在识别第 ${i + 1} / ${total} 张...`
+              message_id: sentMsgId,
+              text: `⏳ 正在提取数据 (${i + 1}/${total})...`
             }),
             agent: new (require('https').Agent)({ family: 4 })
           });
@@ -557,7 +614,7 @@ export class BotApp {
     const rows = built.rows;
     const rowMap = built.rowMap;
 
-    if (sentMsg) {
+    if (sentMsgId) {
       let summaryText = `📊 *识别完成！(共 ${total} 张图)*\n`;
       if (rows.length === 0) {
         summaryText += `- 未识别到有效数据\n`;
@@ -575,13 +632,15 @@ export class BotApp {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            message_id: sentMsg.message_id,
+            message_id: sentMsgId,
             text: summaryText,
             parse_mode: 'Markdown'
           }),
           agent: new (require('https').Agent)({ family: 4 })
         });
       } catch (e) {}
+      
+      this.statusMessages.delete(chatId);
     }
 
     try {
