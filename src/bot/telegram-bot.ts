@@ -463,21 +463,102 @@ export class BotApp {
     let rowIdSeq = 1;
     const rows: any[] = [];
     const rowMap: Map<number, { taskIdx: number; itemIdx: number }> = new Map();
+    
+    // First, collect all rows to group them by channel name
+    const groupedData: Record<string, {
+      rowId: number;
+      渠道名: string;
+      '消耗/U': number;
+      展示: number;
+      点击量: number;
+      sourceLocs: { taskIdx: number; itemIdx: number }[];
+    }> = {};
+
     tasks.forEach((t, taskIdx) => {
       if (t.result && t.result.length > 0) {
         t.result.forEach((r, itemIdx) => {
-          const rowId = rowIdSeq++;
-          rows.push({
-            rowId,
-            渠道名: (r as any).渠道名 || (r as any).名称 || '',
-            '消耗/U': Number((r as any)['消耗/U'] || (r as any).消耗) || 0,
-            展示: Number((r as any).展示) || 0,
-            点击量: Number((r as any).点击量 || (r as any).点击) || 0
-          });
-          rowMap.set(rowId, { taskIdx, itemIdx });
+          const channelName = (r as any).渠道名 || (r as any).名称 || '';
+          const spend = Number((r as any)['消耗/U'] || (r as any).消耗) || 0;
+          const impressions = Number((r as any).展示) || 0;
+          const clicks = Number((r as any).点击量 || (r as any).点击) || 0;
+
+          if (!groupedData[channelName]) {
+            groupedData[channelName] = {
+              rowId: rowIdSeq++,
+              渠道名: channelName,
+              '消耗/U': 0,
+              展示: 0,
+              点击量: 0,
+              sourceLocs: []
+            };
+          }
+
+          groupedData[channelName]['消耗/U'] += spend;
+          groupedData[channelName].展示 += impressions;
+          groupedData[channelName].点击量 += clicks;
+          groupedData[channelName].sourceLocs.push({ taskIdx, itemIdx });
         });
       }
     });
+
+    // Fix precision issues after summation and map to final structures
+    Object.values(groupedData).forEach(g => {
+      // Keep only 2 decimal places for spend
+      g['消耗/U'] = Math.round(g['消耗/U'] * 100) / 100;
+      
+      rows.push({
+        rowId: g.rowId,
+        渠道名: g.渠道名,
+        '消耗/U': g['消耗/U'],
+        展示: g.展示,
+        点击量: g.点击量
+      });
+
+      // Map the single rowId to the primary source location for AI editing
+      // If we merge multiple rows, editing via AI will update the primary item and delete the rest
+      if (g.sourceLocs.length > 0) {
+        rowMap.set(g.rowId, g.sourceLocs[0]);
+        
+        // Clear out the extra merged items in the underlying task.result
+        // so that the generated Excel only contains the aggregated items
+        if (g.sourceLocs.length > 1) {
+          // Update the primary item with the aggregated values
+          const primary = g.sourceLocs[0];
+          const primaryItem = tasks[primary.taskIdx].result![primary.itemIdx] as any;
+          primaryItem['消耗/U'] = g['消耗/U'];
+          primaryItem.展示 = g.展示;
+          primaryItem.点击量 = g.点击量;
+
+          // Nullify the others
+          for (let i = 1; i < g.sourceLocs.length; i++) {
+            const dup = g.sourceLocs[i];
+            tasks[dup.taskIdx].result![dup.itemIdx] = null as any;
+          }
+        }
+      }
+    });
+
+    // Cleanup nulls from task results and rebuild rowMap
+    rowMap.clear();
+    tasks.forEach((t, taskIdx) => {
+      if (t.result) {
+        // filter out nulls and re-assign
+        t.result = t.result.filter(item => item !== null);
+        
+        // After filtering, update rowMap to point to the new indices
+        t.result.forEach((item, itemIdx) => {
+          const channelName = (item as any).渠道名 || (item as any).名称 || '';
+          const rowId = groupedData[channelName]?.rowId;
+          if (rowId) {
+            rowMap.set(rowId, { taskIdx, itemIdx });
+          }
+        });
+      }
+    });
+
+    // Sort rows by rowId to maintain order
+    rows.sort((a, b) => a.rowId - b.rowId);
+
     return { rows, rowMap };
   }
 
