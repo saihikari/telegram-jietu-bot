@@ -292,6 +292,7 @@ export class BotApp {
   /help - 查看帮助和FAQ
   /status - 获取状态页URL
   /clear - 清空等待处理的图片队列
+  /switch_mode - 切换识别模式 (OCR / LLM)
 - 常见问题：
   1. 若数字识别不准，请尽量在发送图片时选择“作为文件发送(File)”以保持原图清晰度。
   2. 若机器人未回复，请检查管理后台的API Key是否配置正确或欠费。
@@ -347,7 +348,30 @@ export class BotApp {
       const settings = getSettings();
       settings.llm.model = newModel;
       saveSettings(settings);
-      this.bot.sendMessage(chatId, `✅ 主力模型已一键切换为: ${newModel}`);
+      this.bot.sendMessage(chatId, `✅ 成功切换模型为: ${newModel}。`);
+    } else if (text.startsWith('/switch_mode')) {
+      if (chatId !== this.allowedChatIds[0]) return this.bot.sendMessage(chatId, '⛔ 只有超级管理员可以使用此命令。');
+      
+      const currentMode = process.env.RECOGNITION_METHOD || 'llm';
+      const newMode = currentMode === 'llm' ? 'ocr' : 'llm';
+      
+      // Update process.env for current process
+      process.env.RECOGNITION_METHOD = newMode;
+      
+      // Persist to .env file
+      const envPath = path.join(process.cwd(), '.env');
+      if (fs.existsSync(envPath)) {
+        let envContent = fs.readFileSync(envPath, 'utf8');
+        if (envContent.includes('RECOGNITION_METHOD=')) {
+          envContent = envContent.replace(/(RECOGNITION_METHOD=).*/, `$1${newMode}`);
+        } else {
+          envContent += `\nRECOGNITION_METHOD=${newMode}`;
+        }
+        fs.writeFileSync(envPath, envContent);
+      }
+      
+      const modeName = newMode === 'ocr' ? '纯本地 OCR (免费/高速/适合规范表格)' : '大模型视觉 (智能/适合复杂截图)';
+      this.bot.sendMessage(chatId, `🔄 识别模式已切换！\n当前模式：*${modeName}*`, { parse_mode: 'Markdown' });
     }
   }
 
