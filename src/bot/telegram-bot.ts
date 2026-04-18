@@ -354,10 +354,21 @@ export class BotApp {
       process.env.ACTIVE_LLM_PROFILE = newProfile;
       
       // Switch LLM configurations dynamically based on profile
-      const prefix = newProfile === 'alt' ? 'ALT_' : '';
-      process.env.LLM_API_KEY = process.env[`${prefix}LLM_API_KEY`] || '';
-      process.env.LLM_BASE_URL = process.env[`${prefix}LLM_BASE_URL`] || '';
-      process.env.LLM_MODEL = process.env[`${prefix}LLM_MODEL`] || '';
+      const envPath = path.join(process.cwd(), '.env');
+      let parsedEnv: Record<string, string> = {};
+      if (fs.existsSync(envPath)) {
+        parsedEnv = require('dotenv').parse(fs.readFileSync(envPath));
+      }
+      
+      if (newProfile === 'alt') {
+        process.env.LLM_API_KEY = parsedEnv.ALT_LLM_API_KEY || '';
+        process.env.LLM_BASE_URL = parsedEnv.ALT_LLM_BASE_URL || '';
+        process.env.LLM_MODEL = parsedEnv.ALT_LLM_MODEL || '';
+      } else {
+        process.env.LLM_API_KEY = parsedEnv.LLM_API_KEY || '';
+        process.env.LLM_BASE_URL = parsedEnv.LLM_BASE_URL || '';
+        process.env.LLM_MODEL = parsedEnv.LLM_MODEL || '';
+      }
       
       // Sync with application settings to ensure runtime logic uses the correct one
       const settings = getSettings();
@@ -367,7 +378,6 @@ export class BotApp {
       saveSettings(settings);
       
       // Persist to .env file
-      const envPath = path.join(process.cwd(), '.env');
       if (fs.existsSync(envPath)) {
         let envContent = fs.readFileSync(envPath, 'utf8');
         if (envContent.includes('ACTIVE_LLM_PROFILE=')) {
@@ -378,7 +388,7 @@ export class BotApp {
         fs.writeFileSync(envPath, envContent);
       }
       
-      const modelName = newProfile === 'main' ? '主力大模型 (ChatAnywhere / GPT-4o)' : '备用大模型 (阿里云 / Qwen-VL-Max)';
+      const modelName = newProfile === 'main' ? '主力大模型 (ChatAnywhere / GPT-4o)' : '备用大模型 (硅基流动 / Qwen2-VL)';
       this.bot.sendMessage(chatId, `🔄 模型引擎已切换！\n当前使用：*${modelName}*\n模型版本：${process.env.LLM_MODEL}`, { parse_mode: 'Markdown' });
     } else if (text.startsWith('/info')) {
       // Show current configuration
