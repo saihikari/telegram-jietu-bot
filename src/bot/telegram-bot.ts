@@ -404,11 +404,11 @@ export class BotApp {
         : '未配置或太短';
 
       const infoMsg = `🤖 *当前运行配置信息*\n\n` +
-                      `📍 **当前模式**: ${profileName}\n` +
-                      `🧠 **运行模型**: \`${modelName}\`\n` +
-                      `🌐 **接口地址**: \`${baseUrl}\`\n` +
-                      `🔑 **API Key**: \`${maskedKey}\`\n\n` +
-                      `💡 使用 /switch_mode 可以一键切换主备配置。`;
+                      `📍 *当前模式*: ${profileName}\n` +
+                      `🧠 *运行模型*: \`${modelName}\`\n` +
+                      `🌐 *接口地址*: \`${baseUrl}\`\n` +
+                      `🔑 *API Key*: \`${maskedKey}\`\n\n` +
+                      `💡 使用 /switch\\_mode 可以一键切换主备配置。`;
                       
       this.bot.sendMessage(chatId, infoMsg, { parse_mode: 'Markdown' });
     }
