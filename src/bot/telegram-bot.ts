@@ -291,7 +291,7 @@ export class BotApp {
   /status - 获取状态页URL
   /info - 查看当前正在使用的大模型配置
   /clear - 清空等待处理的图片队列
-  /switch_mode - 一键切换主/备大模型`;
+  /switch\\_mode - 一键切换主/备大模型`;
       this.bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
     } else if (text.startsWith('/status')) {
       const port = process.env.WEB_PORT || 8070;
