@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { OpenAI } from 'openai';
-import Tesseract from 'tesseract.js';
 import { getSettings } from '../utils/config';
 import { AdData, ImageTask } from '../types';
 import logger from '../utils/logger';
@@ -46,12 +45,6 @@ export class ImageProcessor {
   public async processImage(task: ImageTask): Promise<AdData[]> {
     if (!task.localPath || !fs.existsSync(task.localPath)) {
       throw new Error(`Image not found: ${task.localPath}`);
-    }
-
-    const method = process.env.RECOGNITION_METHOD || 'llm';
-    if (method.toLowerCase() === 'ocr') {
-      logger.info(`[OCR] Using pure OCR method for image ${task.localPath}`);
-      return this.processImageWithPureOCR(task);
     }
 
     const settings = getSettings();
@@ -206,72 +199,6 @@ export class ImageProcessor {
       throw new Error(`No array returned from LLM: ${content}`);
     } finally {
       clearTimeout(timeoutId);
-    }
-  }
-
-  private async processImageWithPureOCR(task: ImageTask): Promise<AdData[]> {
-    try {
-      logger.info(`[OCR] Starting Tesseract.js for ${task.localPath}`);
-      // Using chi_sim + eng. The first run will download the language files (~15-30MB)
-      const { data: { text } } = await Tesseract.recognize(
-        task.localPath!,
-        'chi_sim+eng',
-        { logger: m => logger.debug(`[OCR Progress] ${m.status} - ${(m.progress * 100).toFixed(0)}%`) }
-      );
-      
-      logger.info(`[OCR] Raw Extracted Text for message ${task.message_id}:\n${text}`);
-      
-      // -- Naive Parser Demonstration --
-      // Pure OCR output is usually read top-to-bottom, left-to-right.
-      // Tables are notoriously difficult because the visual rows don't always align in text.
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      const results: AdData[] = [];
-      
-      let currentChannel = '';
-      
-      for (const line of lines) {
-        // Skip obvious table headers
-        if (line.includes('消耗') || line.includes('展示') || line.includes('点击') || line.includes('渠道')) {
-          continue;
-        }
-        
-        // Extract numbers and non-numbers
-        const numberMatches = line.match(/[\d.,]+/g);
-        const textOnly = line.replace(/[\d.,\s]+/g, '').trim();
-
-        if (numberMatches && numberMatches.length >= 3) {
-           // We found a line with at least 3 numbers (Cost, Impressions, Clicks)
-           // It might have the channel name in the same line or the channel name was on the previous line
-           const name = textOnly.length > 0 ? textOnly : currentChannel;
-           const numbers = numberMatches.map(n => parseFloat(n.replace(/,/g, '')));
-           
-           results.push({
-             '渠道名': name || '未知渠道',
-             '消耗/U': numbers[0] || 0,
-             '展示': numbers[1] || 0,
-             '点击量': numbers[2] || 0
-           });
-           currentChannel = ''; // Reset
-        } else if (textOnly.length > 0) {
-           // Assume this is a channel name waiting for numbers on the next line
-           currentChannel = textOnly;
-        }
-      }
-      
-      if (results.length === 0 && text.trim().length > 0) {
-        logger.warn(`[OCR] Extracted text but failed to parse into rows using naive regex.`);
-        results.push({
-          '渠道名': 'OCR提取成功但正则解析失败(见日志)',
-          '消耗/U': 0,
-          '展示': 0,
-          '点击量': 0
-        });
-      }
-
-      return results;
-    } catch (err: any) {
-      logger.error(`[OCR] Failed to process image ${task.localPath}:`, err);
-      throw err;
     }
   }
 }

@@ -292,7 +292,7 @@ export class BotApp {
   /help - 查看帮助和FAQ
   /status - 获取状态页URL
   /clear - 清空等待处理的图片队列
-  /switch_mode - 切换识别模式 (OCR / LLM)
+  /switch_mode - 一键切换主/备大模型 (ChatAnywhere / 阿里云)
 - 常见问题：
   1. 若数字识别不准，请尽量在发送图片时选择“作为文件发送(File)”以保持原图清晰度。
   2. 若机器人未回复，请检查管理后台的API Key是否配置正确或欠费。
@@ -352,26 +352,39 @@ export class BotApp {
     } else if (text.startsWith('/switch_mode')) {
       if (chatId !== this.allowedChatIds[0]) return this.bot.sendMessage(chatId, '⛔ 只有超级管理员可以使用此命令。');
       
-      const currentMode = process.env.RECOGNITION_METHOD || 'llm';
-      const newMode = currentMode === 'llm' ? 'ocr' : 'llm';
+      const currentProfile = process.env.ACTIVE_LLM_PROFILE || 'main';
+      const newProfile = currentProfile === 'main' ? 'alt' : 'main';
       
       // Update process.env for current process
-      process.env.RECOGNITION_METHOD = newMode;
+      process.env.ACTIVE_LLM_PROFILE = newProfile;
+      
+      // Switch LLM configurations dynamically based on profile
+      const prefix = newProfile === 'alt' ? 'ALT_' : '';
+      process.env.LLM_API_KEY = process.env[`${prefix}LLM_API_KEY`] || '';
+      process.env.LLM_BASE_URL = process.env[`${prefix}LLM_BASE_URL`] || '';
+      process.env.LLM_MODEL = process.env[`${prefix}LLM_MODEL`] || '';
+      
+      // Sync with application settings to ensure runtime logic uses the correct one
+      const settings = getSettings();
+      settings.llm.apiKey = process.env.LLM_API_KEY;
+      settings.llm.baseUrl = process.env.LLM_BASE_URL;
+      settings.llm.model = process.env.LLM_MODEL;
+      saveSettings(settings);
       
       // Persist to .env file
       const envPath = path.join(process.cwd(), '.env');
       if (fs.existsSync(envPath)) {
         let envContent = fs.readFileSync(envPath, 'utf8');
-        if (envContent.includes('RECOGNITION_METHOD=')) {
-          envContent = envContent.replace(/(RECOGNITION_METHOD=).*/, `$1${newMode}`);
+        if (envContent.includes('ACTIVE_LLM_PROFILE=')) {
+          envContent = envContent.replace(/(ACTIVE_LLM_PROFILE=).*/, `$1${newProfile}`);
         } else {
-          envContent += `\nRECOGNITION_METHOD=${newMode}`;
+          envContent += `\nACTIVE_LLM_PROFILE=${newProfile}`;
         }
         fs.writeFileSync(envPath, envContent);
       }
       
-      const modeName = newMode === 'ocr' ? '纯本地 OCR (免费/高速/适合规范表格)' : '大模型视觉 (智能/适合复杂截图)';
-      this.bot.sendMessage(chatId, `🔄 识别模式已切换！\n当前模式：*${modeName}*`, { parse_mode: 'Markdown' });
+      const modelName = newProfile === 'main' ? '主力大模型 (ChatAnywhere / GPT-4o)' : '备用大模型 (阿里云 / Qwen-VL-Max)';
+      this.bot.sendMessage(chatId, `🔄 模型引擎已切换！\n当前使用：*${modelName}*\n模型版本：${process.env.LLM_MODEL}`, { parse_mode: 'Markdown' });
     }
   }
 
