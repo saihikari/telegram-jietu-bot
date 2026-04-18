@@ -728,10 +728,34 @@ export class BotApp {
       const excelPath = await this.excelGen.generateExcel(tasks);
       const filename = path.basename(excelPath);
 
-      const caption =
+      let caption =
         `是否呼唤日报机器人自动做日报？\n` +
         `PS:《A45/69T》这张表，可以选择“自动录入”或“人工录入”\n` +
         `如果不属于这张表，只能选择“人工录入”`;
+
+      // 如果使用的是 ChatAnywhere，顺便检查一下余额
+      const llmBaseUrl = process.env.LLM_BASE_URL || '';
+      if (llmBaseUrl.includes('chatanywhere')) {
+        try {
+          const nodeFetch = require('node-fetch');
+          const apiKey = process.env.LLM_API_KEY || '';
+          // 调用通用的计费查询接口
+          const res = await nodeFetch('https://api.chatanywhere.tech/v1/dashboard/billing/subscription', {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            agent: new (require('https').Agent)({ family: 4 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // ChatAnywhere / OneAPI 通常将剩余额度放在 hard_limit_usd、total_available 等字段
+            const balance = data.total_available ?? data.hard_limit_usd ?? data.balance ?? null;
+            if (balance !== null && Number(balance) < 10) {
+              caption += `\n\n⚠️ 警告：当前 API 余额仅剩 ${Number(balance).toFixed(2)} 元，不足 10 元，请及时充值！`;
+            }
+          }
+        } catch (e) {
+          logger.warn('Failed to fetch ChatAnywhere balance', e);
+        }
+      }
       
       await this.bot.sendDocument(chatId, excelPath, {
         caption,
