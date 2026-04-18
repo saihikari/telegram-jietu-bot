@@ -291,6 +291,7 @@ export class BotApp {
   /test - 测试内部群连通性
   /help - 查看帮助和FAQ
   /status - 获取状态页URL
+  /info - 查看当前正在使用的大模型配置
   /clear - 清空等待处理的图片队列
   /switch_mode - 一键切换主/备大模型 (ChatAnywhere / 阿里云)
 - 常见问题：
@@ -385,6 +386,27 @@ export class BotApp {
       
       const modelName = newProfile === 'main' ? '主力大模型 (ChatAnywhere / GPT-4o)' : '备用大模型 (阿里云 / Qwen-VL-Max)';
       this.bot.sendMessage(chatId, `🔄 模型引擎已切换！\n当前使用：*${modelName}*\n模型版本：${process.env.LLM_MODEL}`, { parse_mode: 'Markdown' });
+    } else if (text.startsWith('/info')) {
+      // Show current configuration
+      const currentProfile = process.env.ACTIVE_LLM_PROFILE || 'main';
+      const profileName = currentProfile === 'main' ? '主力配置 (Main)' : '备用配置 (Alt)';
+      const modelName = process.env.LLM_MODEL || '未配置';
+      const baseUrl = process.env.LLM_BASE_URL || '未配置';
+      
+      // Mask API Key for security
+      const apiKey = process.env.LLM_API_KEY || '';
+      const maskedKey = apiKey.length > 8 
+        ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` 
+        : '未配置或太短';
+
+      const infoMsg = `🤖 *当前运行配置信息*\n\n` +
+                      `📍 **当前模式**: ${profileName}\n` +
+                      `🧠 **运行模型**: \`${modelName}\`\n` +
+                      `🌐 **接口地址**: \`${baseUrl}\`\n` +
+                      `🔑 **API Key**: \`${maskedKey}\`\n\n` +
+                      `💡 使用 /switch_mode 可以一键切换主备配置。`;
+                      
+      this.bot.sendMessage(chatId, infoMsg, { parse_mode: 'Markdown' });
     }
   }
 
