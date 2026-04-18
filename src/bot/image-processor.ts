@@ -53,36 +53,66 @@ export class ImageProcessor {
       const base64Image = fs.readFileSync(task.localPath, 'base64');
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
-      const safeBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl).replace(/\/$/, '');
-      logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${settings.llm.model}`);
+      const rawBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl || '').trim();
+      const safeBaseUrl = rawBaseUrl
+        .replace(/^`|`$/g, '')
+        .replace(/^"|"$/g, '')
+        .replace(/^'|'$/g, '')
+        .replace(/\/$/, '');
+      const apiKey = (process.env.LLM_API_KEY || settings.llm.apiKey || '').trim().replace(/^`|`$/g, '').replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+      const model = (process.env.LLM_MODEL || settings.llm.model || '').trim().replace(/^`|`$/g, '').replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+      logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${model || settings.llm.model}`);
 
       // We pass an abort signal to the fetch call inside openai to prevent hanging
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for LLM
 
-      let response;
+      let response: any = null;
       try {
         logger.info(`[LLM Request] Starting request to OpenAI API...`);
         
         const client = new OpenAI({
-          apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
+          apiKey,
           baseURL: safeBaseUrl,
           fetch: customFetch as any
         });
         
-        response = await client.chat.completions.create({
-          model: process.env.LLM_MODEL || settings.llm.model,
-          messages: [
-            { role: "system", content: settings.llm.systemPrompt },
-            { role: "user", content: [
+        const messages: any[] = [
+          { role: "system", content: settings.llm.systemPrompt },
+          {
+            role: "user",
+            content: [
               { type: "text", text: "请识别这张截图中的广告数据：" },
               { type: "image_url", image_url: { url: dataUrl } }
-            ] }
-          ],
-          max_tokens: settings.llm.maxTokens,
-          temperature: settings.llm.temperature,
-          response_format: { type: "json_object" }
-        }, { signal: controller.signal as any });
+            ]
+          }
+        ];
+
+        let lastErr: any = null;
+        for (const withResponseFormat of [true, false]) {
+          try {
+            const req: any = {
+              model,
+              messages,
+              max_tokens: settings.llm.maxTokens,
+              temperature: settings.llm.temperature
+            };
+            if (withResponseFormat) req.response_format = { type: "json_object" };
+            response = await client.chat.completions.create(req, { signal: controller.signal as any });
+            break;
+          } catch (e: any) {
+            lastErr = e;
+            const status = e?.status || e?.response?.status || e?.response?.statusCode;
+            const data = e?.response?.data || e?.response || {};
+            const combined = `${e?.message || ''} ${JSON.stringify(data)}`;
+            if (withResponseFormat && status === 400 && /response_format|json_object|json schema|invalid_request/i.test(combined)) {
+              logger.warn('[LLM] response_format not supported by provider, retrying without response_format');
+              continue;
+            }
+            throw e;
+          }
+        }
+        if (!response) throw lastErr || new Error('LLM request failed');
         logger.info(`[LLM Response] Received response successfully.`);
       } catch (err: any) {
         // Provide more detailed info for Connection Error
@@ -141,15 +171,22 @@ export class ImageProcessor {
 
   public async reviseRows(rows: any[], instruction: string): Promise<any[]> {
     const settings = getSettings();
-    const safeBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl).replace(/\/$/, '');
-    logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${settings.llm.model} for revision`);
+    const rawBaseUrl = (process.env.LLM_BASE_URL || settings.llm.baseUrl || '').trim();
+    const safeBaseUrl = rawBaseUrl
+      .replace(/^`|`$/g, '')
+      .replace(/^"|"$/g, '')
+      .replace(/^'|'$/g, '')
+      .replace(/\/$/, '');
+    const apiKey = (process.env.LLM_API_KEY || settings.llm.apiKey || '').trim().replace(/^`|`$/g, '').replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+    const model = (process.env.LLM_MODEL || settings.llm.model || '').trim().replace(/^`|`$/g, '').replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+    logger.info(`[LLM Config] Calling LLM API via ${safeBaseUrl} with model ${model || settings.llm.model} for revision`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
       const client = new OpenAI({
-        apiKey: process.env.LLM_API_KEY || settings.llm.apiKey,
+        apiKey,
         baseURL: safeBaseUrl,
         fetch: customFetch as any
       });
@@ -160,22 +197,43 @@ export class ImageProcessor {
         '你必须返回 JSON 对象：{"rows":[...]}，并且每一行必须保留 rowId。' +
         '如果用户没有提到某行，就保持该行不变。不要输出任何解释文字。';
 
-      const response = await client.chat.completions.create({
-        model: process.env.LLM_MODEL || settings.llm.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              rows,
-              instruction
-            })
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            rows,
+            instruction
+          })
+        }
+      ];
+
+      let response: any = null;
+      let lastErr: any = null;
+      for (const withResponseFormat of [true, false]) {
+        try {
+          const req: any = {
+            model,
+            messages,
+            max_tokens: Math.min(1200, settings.llm.maxTokens || 1000),
+            temperature: 0
+          };
+          if (withResponseFormat) req.response_format = { type: 'json_object' };
+          response = await client.chat.completions.create(req, { signal: controller.signal as any });
+          break;
+        } catch (e: any) {
+          lastErr = e;
+          const status = e?.status || e?.response?.status || e?.response?.statusCode;
+          const data = e?.response?.data || e?.response || {};
+          const combined = `${e?.message || ''} ${JSON.stringify(data)}`;
+          if (withResponseFormat && status === 400 && /response_format|json_object|json schema|invalid_request/i.test(combined)) {
+            logger.warn('[LLM] response_format not supported by provider, retrying without response_format');
+            continue;
           }
-        ],
-        max_tokens: Math.min(1200, settings.llm.maxTokens || 1000),
-        temperature: 0,
-        response_format: { type: 'json_object' }
-      }, { signal: controller.signal as any });
+          throw e;
+        }
+      }
+      if (!response && lastErr) throw lastErr;
 
       const content = response.choices[0]?.message?.content;
       if (!content) throw new Error('No content returned from LLM');
