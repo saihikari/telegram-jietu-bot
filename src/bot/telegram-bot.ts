@@ -542,11 +542,11 @@ export class BotApp {
     rowMap.clear();
     tasks.forEach((t, taskIdx) => {
       if (t.result) {
-        // filter out nulls and re-assign
-        t.result = t.result.filter(item => item !== null);
+        // DO NOT filter out nulls to avoid index mismatch
+        // t.result = t.result.filter(item => item !== null);
         
-        // After filtering, update rowMap to point to the new indices
         t.result.forEach((item, itemIdx) => {
+          if (!item) return;
           const channelName = (item as any).渠道名 || (item as any).名称 || '';
           const rowId = groupedData[channelName]?.rowId;
           if (rowId) {

@@ -53,6 +53,7 @@ export class ExcelGenerator {
     tasks.forEach(task => {
       if (task.result) {
         task.result.forEach(item => {
+          if (!item) return; // skip nulls if any snuck in
           const channelName = item.渠道名 || item.名称 || '未知渠道';
           // 日报sheet规则：去掉后面的”-APP"或者“-APK”或者”-app"或者“-apk”及其后面的所有字符串
           const sheetName = channelName.replace(/-?(APP|APK|app|apk).*$/i, '');
@@ -166,7 +167,10 @@ export class ExcelGenerator {
 
       // 4. 打印识别结果数据
       if (task.result && task.result.length > 0) {
+        let hasValidData = false;
         task.result.forEach(r => {
+          if (!r) return;
+          hasValidData = true;
           const ch = r.渠道名 || r.名称 || '';
           const cost = r['消耗/U'] || r.消耗 || 0;
           const imp = r.展示 || 0;
@@ -190,6 +194,14 @@ export class ExcelGenerator {
           
           currentRow++;
         });
+        
+        if (!hasValidData) {
+          const noDataRow = detailSheet.getRow(currentRow);
+          noDataRow.getCell(1).value = '无有效数据（已合并或删除）';
+          detailSheet.mergeCells(currentRow, 1, currentRow, 4);
+          noDataRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+          currentRow++;
+        }
       } else {
         const noDataRow = detailSheet.getRow(currentRow);
         noDataRow.getCell(1).value = '识别失败或无有效数据';
