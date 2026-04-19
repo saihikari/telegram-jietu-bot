@@ -342,54 +342,16 @@ const safeJson = async (res: any) => {
 };
 
 apiRouter.get('/status', async (req, res) => {
-  let report: any = null;
-  try {
-    const nodeFetch = require('node-fetch');
-    const r = await nodeFetch(`${reportBaseUrl}/api/status`, { timeout: 5000 });
-    report = await safeJson(r);
-  } catch (e: any) {
-    report = { online: false, error: e?.message || 'failed' };
-  }
   res.json({
-    screenshot: botStats,
-    report
+    screenshot: botStats
   });
 });
 
 apiRouter.get('/config', async (req, res) => {
-  const target = (req.query.target || 'screenshot').toString();
-  if (target === 'report') {
-    try {
-      const nodeFetch = require('node-fetch');
-      const r = await nodeFetch(`${reportBaseUrl}/api/config`, { timeout: 5000 });
-      if (!r.ok) return res.status(r.status).json({ success: false, error: `HTTP ${r.status}` });
-      const json = await safeJson(r);
-      return res.json(json);
-    } catch (e: any) {
-      return res.status(500).json({ success: false, error: e?.message || 'failed' });
-    }
-  }
   res.json(getSettings());
 });
 
 apiRouter.post('/config', express.json(), async (req, res) => {
-  const target = (req.query.target || 'screenshot').toString();
-  if (target === 'report') {
-    try {
-      const nodeFetch = require('node-fetch');
-      const r = await nodeFetch(`${reportBaseUrl}/api/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body),
-        timeout: 8000
-      });
-      if (!r.ok) return res.status(r.status).json({ success: false, error: `HTTP ${r.status}` });
-      const json = await safeJson(r);
-      return res.json(json);
-    } catch (e: any) {
-      return res.status(500).json({ success: false, error: e?.message || 'failed' });
-    }
-  }
   try {
     const newSettings = req.body as Settings;
     saveSettings(newSettings);
@@ -401,18 +363,6 @@ apiRouter.post('/config', express.json(), async (req, res) => {
 });
 
 apiRouter.post('/config/backup', async (req, res) => {
-  const target = (req.query.target || 'screenshot').toString();
-  if (target === 'report') {
-    try {
-      const nodeFetch = require('node-fetch');
-      const r = await nodeFetch(`${reportBaseUrl}/api/config/backup`, { method: 'POST', timeout: 8000 });
-      if (!r.ok) return res.status(r.status).json({ success: false, error: `HTTP ${r.status}` });
-      const json = await safeJson(r);
-      return res.json(json);
-    } catch (e: any) {
-      return res.status(500).json({ success: false, error: e?.message || 'failed' });
-    }
-  }
   try {
     const backupPath = backupSettings();
     res.json({ success: true, path: backupPath });

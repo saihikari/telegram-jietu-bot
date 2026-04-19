@@ -262,20 +262,6 @@
       }, []);
 
       const screenshot = data?.screenshot;
-      const report = data?.report;
-      const reportStats = (() => {
-        if (!report || report?.online === false) return null;
-        if (typeof report?.startTime === 'number') return report;
-        if (typeof report?.uptime_seconds === 'number') {
-          return {
-            startTime: Date.now() - report.uptime_seconds * 1000,
-            queueLength: report.queueLength,
-            isProcessing: report.isProcessing,
-            processedCount: report.processedCount
-          };
-        }
-        return report;
-      })();
 
       return (
         <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
@@ -292,17 +278,6 @@
             ) : (
               <div className="space-y-4 md:space-y-6">
                 <StatsSection title="截图机器人" icon="image" stats={screenshot} />
-                {report?.online === false ? (
-                  <div className="bg-tg-bg rounded-2xl card-shadow p-4 md:p-6">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon name="file-spreadsheet" size={18} className="text-[rgb(var(--primary))]" />
-                      <div className="font-bold text-tg-text">日报机器人</div>
-                    </div>
-                    <div className="text-sm text-red-500 mt-2">未连接：{report?.error || ''}</div>
-                  </div>
-                ) : (
-                  <StatsSection title="日报机器人" icon="file-spreadsheet" stats={reportStats} />
-                )}
               </div>
             )}
           </div>
@@ -410,33 +385,18 @@
       );
     };
 
-    const ReportPage = ({ showToast }) => {
-      return (
-        <div className="w-full h-full bg-tg-secondary_bg overflow-y-auto pt-[env(safe-area-inset-top)]">
-          <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 md:space-y-6">
-            <div className="mb-1 md:mb-2 flex items-center gap-2 md:gap-3 pb-3 md:pb-4 border-b border-tg-hint/20">
-              <Icon name="file-spreadsheet" size={24} className="text-[rgb(var(--primary))] md:w-[32px] md:h-[32px]" />
-              <h1 className="text-xl md:text-3xl font-bold text-tg-text">日报</h1>
-            </div>
-            <ConfigPanel title="日报机器人配置" target="report" showToast={showToast} />
-          </div>
-        </div>
-      );
-    };
-
     const App = () => {
       const initialTab = (() => {
         const hash = (window.location.hash || '').replace('#', '');
-        if (hash === 'screenshot' || hash === 'report' || hash === 'status') return hash;
+        if (hash === 'screenshot' || hash === 'status') return hash;
         if (hash === 'config') return 'screenshot';
-        return 'status';
+        return 'screenshot';
       })();
       const [tab, setTab] = useState(initialTab);
       const { toast, show, clear } = useToast();
 
       const content = useMemo(() => {
         if (tab === 'screenshot') return <ScreenshotPage showToast={show} />;
-        if (tab === 'report') return <ReportPage showToast={show} />;
         return <StatusPage showToast={show} />;
       }, [tab]);
 
@@ -458,11 +418,7 @@
             <div className="flex flex-row md:flex-col w-full px-2 md:space-y-3 justify-between md:justify-start h-full md:h-auto">
               <button onClick={() => setTab('screenshot')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'screenshot' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
                 <Icon name="image" size={22} className="mb-1" />
-                <span className="text-[10px] md:text-xs font-medium">截图</span>
-              </button>
-              <button onClick={() => setTab('report')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'report' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
-                <Icon name="file-spreadsheet" size={22} className="mb-1" />
-                <span className="text-[10px] md:text-xs font-medium">日报</span>
+                <span className="text-[10px] md:text-xs font-medium">配置</span>
               </button>
               <button onClick={() => setTab('status')} className={`flex-1 md:w-full h-full md:py-3 flex flex-col items-center justify-center md:rounded-2xl transition-colors ${tab === 'status' ? 'text-[rgb(var(--primary))] md:bg-[rgba(var(--primary),0.1)]' : 'hover:text-tg-text'}`}>
                 <Icon name="activity" size={22} className="mb-1" />
