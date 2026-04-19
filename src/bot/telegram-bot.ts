@@ -764,7 +764,11 @@ export class BotApp {
         summaryText += `- 未识别到有效数据\n`;
       } else {
         rows.forEach((r: any) => {
-          summaryText += `- #${r.rowId} \`${r.渠道名 || '未知'}\` | 消耗: ${r['消耗/U']} | 展示: ${r.展示} | 点击: ${r.点击量}\n`;
+          let rowText = `- #${r.rowId} \`${r.渠道名 || '未知'}\` | 消耗: ${r['消耗/U']} | 展示: ${r.展示} | 点击: ${r.点击量}`;
+          if (r['需人工复查'] === true || r['需人工复查'] === 'true') {
+            rowText += ` 【⚠️这条记录建议人工复查】`;
+          }
+          summaryText += rowText + '\n';
         });
       }
       summaryText += `\n👇 *确认无误请点击下方投递按钮；若有误可点击“告诉AI哪里错了”*`;
