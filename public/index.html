@@ -201,7 +201,7 @@
       const token = sessionStorage.getItem('admin_token');
       const headers = { ...(options?.headers || {}) };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(url, { ...(options || {}), headers });
+      const res = await fetch(url, { credentials: 'same-origin', ...(options || {}), headers });
       if (res.status === 401) {
         if (!retry && tg?.initData) {
           const ok = await doTgLogin();
