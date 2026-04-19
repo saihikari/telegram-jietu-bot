@@ -321,6 +321,11 @@ apiRouter.post('/logout', (req, res) => {
   res.redirect('/admin/login');
 });
 
+apiRouter.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
 apiRouter.use(requireAuth);
 
 const publicPath = path.join(process.cwd(), 'public');

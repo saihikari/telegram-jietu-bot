@@ -201,13 +201,15 @@
       const token = sessionStorage.getItem('admin_token');
       const headers = { ...(options?.headers || {}) };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(url, { credentials: 'same-origin', ...(options || {}), headers });
+      const res = await fetch(url, { ...(options || {}), headers });
       if (res.status === 401) {
         if (!retry && tg?.initData) {
           const ok = await doTgLogin();
           if (ok) return fetchJson(url, options, true);
         }
-        window.location.href = '/admin/login';
+        if (!window.location.pathname.includes('/login')) {
+           window.location.href = '/admin/login';
+        }
         return null;
       }
       const text = await res.text();
