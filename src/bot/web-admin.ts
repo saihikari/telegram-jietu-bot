@@ -93,7 +93,8 @@ const verifySessionToken = (token: string | undefined, expectedUsername: string)
 };
 
 const setSessionCookie = (res: express.Response, token: string) => {
-  const secure = (process.env.WEB_DOMAIN || '').startsWith('https') || process.env.ADMIN_COOKIE_SECURE === 'true';
+  // Only set Secure and SameSite=None if explicitly requested
+  const secure = process.env.ADMIN_COOKIE_SECURE === 'true';
   const parts = [
     `${COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
